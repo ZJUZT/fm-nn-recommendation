@@ -1,0 +1,95 @@
+# coding: utf-8
+"""
+configuration for:
+1. data path
+2. feature encoding (one-hot & continuous & word)
+3. model params
+"""
+
+config = {}
+
+config['train_data'] = 'data/130_train'
+config['test_data'] = 'data/130_test'
+config['game_vector'] = 'data/vec30.txt'
+
+config['train_game_feature'] = 'data/130_train_game'
+config['test_game_feature'] = 'data/130_test_game'
+
+"""
+appid -- 游戏id
+uin -- 用户id
+reg -- 注册游戏list
+login -- 登录游戏list
+pay -- 支付游戏list
+biz -- 游戏公众号点击list
+center -- 游戏中心点击list
+feature -- 其他特征 (libsvm format)
+"""
+config['all_field'] = [
+    'appid',
+    'uid',
+    'reg',
+    'login',
+    'pay',
+    'biz',
+    'center',
+    'tag',
+    'feature'
+]
+
+config['one_hot_feature'] = [
+    'uid'
+]
+
+config['vector_feature'] = [
+    'reg',
+    'login',
+    'pay',
+    'biz',
+    'center',
+]
+
+config['libsvm_feature'] = [
+    'feature'
+]
+
+config['libsvm_feature_only'] = True
+
+# parameters for lgb
+lgb = {
+    'boosting_type': 'gbdt',
+    'num_leaves': 127,
+    'reg_alpha': 0.0,
+    'reg_lambda': 1,
+    'max_depth': -1,
+    'n_estimators': 50,
+    'objective': 'binary',
+    'subsample': 0.8,
+    'colsample_bytree': 0.8,
+    'subsample_freq': 1,
+    'learning_rate': 0.05,
+    'min_child_weight': 10,
+    'random_state': 2018,
+    'n_jobs': 6,
+    'is_unbalance': False,
+    'eval_metric': 'auc',
+    'early_stopping_rounds': 100
+}
+
+config['lgb'] = lgb
+
+xgb = {
+    'max_depth': 15,
+    'reg_lambda': 0.1,
+    'min_child_weight': 50,
+    'n_estimators': 50,
+    'subsample': 0.8,
+    'colsample_bytree': 0.8,
+    'eta': 0.1,
+    'objective': 'binary:logistic',
+    'eval_metric': 'auc',
+    'n_jobs': 2,
+    'early_stopping_rounds': 100
+}
+
+config['xgb'] = xgb
