@@ -1,9 +1,6 @@
 # encoding: utf-8
 
 import xlearn as xl
-from sklearn.datasets import dump_svmlight_file
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import roc_auc_score
 
 from utils import *
 

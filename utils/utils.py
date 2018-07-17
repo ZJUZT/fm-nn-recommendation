@@ -176,3 +176,34 @@ def get_df_from_raw():
 
     return train_x, y_libsvm_train, test_x, y_libsvm_test
 
+
+def convert_to_ffm_format(in_file, out_file, field_info):
+    """
+    convert data in libsvm format to ffm format
+    label   field1:feat1:val1   field2:feat2:val2 ...
+    :param field_info: dict indicating which field the feature belongs
+    :param in_file: input data path
+    :param out_file:  output data path
+    :return:
+    """
+
+    logging.info('convert {} to ffm format in {}'.format(in_file, out_file))
+    logging.info('load libsvm file')
+    x, y = load_svmlight_file(in_file)
+    m, n = x.shape
+    data = []
+
+    for i in range(m):
+        if i % 10000 == 0:
+            logging.debug('processed {} samples'.format(i))
+        tmp = [y[i]]
+        index, value = x[i].nonzero()[1], x[i].data
+        for j in range(len(index)):
+            tmp.append('{}:{}:{}'.format(field_info[index[j]], index[j], value[j]))
+        data.append(' '.join([str(i) for i in tmp]))
+
+    with open(out_file, 'wb') as fp:
+        for line in enumerate(data):
+            fp.write(line + '\n')
+
+    logging.info('conversion done')

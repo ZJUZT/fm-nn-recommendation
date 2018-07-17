@@ -93,3 +93,34 @@ xgb = {
 }
 
 config['xgb'] = xgb
+
+# field info
+fields_index = [
+    (0, 28),
+    (28, 32),
+    (32, 33),
+    (33, 34),
+    (34, 50),
+    (50, 200),
+    (200, 350),
+    (350, 500),
+    (500, 650),
+    (650, 800),
+    (800, 950),
+    (950, 1100),
+    (1100, 1250),
+    (1250, 1300),
+    (1300, 1600),
+    (1600, 1635),
+    (1635, 1730),
+    (1800, 1950)
+]
+
+field_dict = {k[0]: k[1] for k in zip(fields_index, range(len(fields_index)))}
+
+field_info = {}
+for k, v in field_dict.items():
+    for i in range(k[0], k[1]):
+        field_info[i] = v
+
+config['field_info'] = field_info
