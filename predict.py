@@ -21,3 +21,8 @@ if __name__ == '__main__':
     out_file = 'data/130_train.ffm'
 
     convert_to_ffm_format(in_file, out_file, config['field_info'])
+
+    in_file = 'data/130_test.libsvm'
+    out_file = 'data/130_test.ffm'
+
+    convert_to_ffm_format(in_file, out_file, config['field_info'])

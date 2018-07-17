@@ -202,8 +202,8 @@ def convert_to_ffm_format(in_file, out_file, field_info):
             tmp.append('{}:{}:{}'.format(field_info[index[j]], index[j], value[j]))
         data.append(' '.join([str(i) for i in tmp]))
 
-    with open(out_file, 'wb') as fp:
-        for line in enumerate(data):
+    with open(out_file, 'w') as fp:
+        for line in data:
             fp.write(line + '\n')
 
     logging.info('conversion done')
