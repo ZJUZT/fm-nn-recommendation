@@ -1,3 +1,3 @@
 # coding: utf-8
-from .lgb_model import LGBModel
-from .xgb_model import XGBModel
+from .LGB import LGBModel
+from .XGB import XGBModel

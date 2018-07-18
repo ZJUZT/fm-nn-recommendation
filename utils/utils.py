@@ -207,3 +207,29 @@ def convert_to_ffm_format(in_file, out_file, field_info):
             fp.write(line + '\n')
 
     logging.info('conversion done')
+
+
+def get_deep_fm_data_format(in_file):
+    """
+    convert data in libsvm format into deep fm format
+    :param in_file: file path in libsvm format
+    :return: xi, xv, y
+    """
+
+    logging.info('convert {} to deep fm format'.format(in_file))
+    logging.info('load libsvm file')
+    x, y = load_svmlight_file(in_file)
+    m, n = x.shape
+    xi = []
+    xv = []
+
+    for i in range(m):
+        if i % 10000 == 0:
+            logging.debug('processed {} samples'.format(i))
+        index, value = x[i].nonzero()[1], x[i].data
+        xi.append(index)
+        xv.append(value)
+
+    logging.info('conversion done')
+
+    return xi, xv, y

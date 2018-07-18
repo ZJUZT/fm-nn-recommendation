@@ -1,6 +1,6 @@
 # coding: utf-8
 import lightgbm as lgb
-from .base_model import BaseModel
+from .Base_Model import BaseModel
 from utils import *
 
 

@@ -96,12 +96,13 @@ config['xgb'] = xgb
 
 # field info
 fields_index = [
-    (0, 28),
-    (28, 32),
-    (32, 33),
-    (33, 34),
-    (34, 50),
-    (50, 1950)
+    (0, 1950)
+    # (0, 28),
+    # (28, 32),
+    # (32, 33),
+    # (33, 34),
+    # (34, 50),
+    # (50, 1950)
     # (50, 200),
     # (200, 350),
     # (350, 500),
@@ -125,3 +126,6 @@ for k, v in field_dict.items():
         field_info[i] = v
 
 config['field_info'] = field_info
+
+config['field_size'] = len(fields_index)
+config['feature_size'] = 1950
