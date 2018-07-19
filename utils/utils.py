@@ -6,6 +6,7 @@ from config import *
 import os.path
 from scipy import sparse
 import numpy as np
+import pickle
 
 
 def init_logger():
@@ -216,20 +217,42 @@ def get_deep_fm_data_format(in_file):
     :return: xi, xv, y
     """
 
-    logging.info('convert {} to deep fm format'.format(in_file))
-    logging.info('load libsvm file')
-    x, y = load_svmlight_file(in_file)
-    m, n = x.shape
-    xi = []
-    xv = []
+    if os.path.exists(in_file + '_xi'):
+        logging.info('load data from existing file')
+        with open(in_file + '_xi', 'rb') as fp:
+            xi = pickle.load(fp)
 
-    for i in range(m):
-        if i % 10000 == 0:
-            logging.debug('processed {} samples'.format(i))
-        index, value = x[i].nonzero()[1], x[i].data
-        xi.append(index)
-        xv.append(value)
+        with open(in_file + '_xv', 'rb') as fp:
+            xv = pickle.load(fp)
 
-    logging.info('conversion done')
+        with open(in_file + '_y', 'rb') as fp:
+            y = pickle.load(fp)
+    else:
+        logging.info('convert {} to deep fm format'.format(in_file))
+        logging.info('load libsvm file')
+        x, y = load_svmlight_file(in_file)
+        m, n = x.shape
+        xi = []
+        xv = []
+
+        for i in range(m):
+            if i % 10000 == 0:
+                logging.debug('processed {} samples'.format(i))
+            index, value = x[i].nonzero()[1].tolist(), list(filter(lambda a: a != 0, x[i].data.tolist()))
+            assert len(index) == len(value)
+            xi.append(index)
+            xv.append(value)
+
+        logging.info('conversion done')
+        logging.info('save data')
+
+        with open(in_file + '_xi', 'wb') as fp:
+            pickle.dump(xi, fp)
+
+        with open(in_file + '_xv', 'wb') as fp:
+            pickle.dump(xv, fp)
+
+        with open(in_file + '_y', 'wb') as fp:
+            pickle.dump(y, fp)
 
     return xi, xv, y

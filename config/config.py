@@ -128,4 +128,4 @@ for k, v in field_dict.items():
 config['field_info'] = field_info
 
 config['field_size'] = len(fields_index)
-config['feature_size'] = 1950
+config['feature_size'] = [1950]

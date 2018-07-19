@@ -251,8 +251,12 @@ class DeepFM(torch.nn.Module):
                 deep_emb = torch.cat([sum(ffm_second_order_embs) for ffm_second_order_embs in ffm_second_order_emb_arr],
                                      1)
             else:
-                deep_emb = torch.cat([(torch.sum(emb(Xi[:, i, :]), 1).t() * Xv[:, i]).t() for i, emb in
-                                      enumerate(self.fm_second_order_embeddings)], 1)
+                # deep_emb = torch.cat([(torch.sum(emb(Xi[:, i, :]), 1).t() * Xv[:, i]).t() for i, emb in
+                #                       enumerate(self.fm_second_order_embeddings)], 1)
+                emb = self.fm_second_order_embeddings[0]
+                deep_emb = 0
+                for i in range(self.batch_size):
+                    deep_emb += emb(torch.LongTensor(Xi[i])).t() * torch.FloatTensor(Xv[i])
 
             if self.deep_layers_activation == 'sigmoid':
                 activation = F.sigmoid
@@ -318,12 +322,14 @@ class DeepFM(torch.nn.Module):
         if self.verbose:
             print("pre_process data ing...")
         is_valid = False
-        Xi_train = np.array(Xi_train).reshape((-1, self.field_size, 1))
+        # Xi_train = np.array(Xi_train).reshape((-1, self.field_size, 1))
+        Xi_train = np.array(Xi_train)
         Xv_train = np.array(Xv_train)
         y_train = np.array(y_train)
         x_size = Xi_train.shape[0]
         if Xi_valid:
-            Xi_valid = np.array(Xi_valid).reshape((-1, self.field_size, 1))
+            # Xi_valid = np.array(Xi_valid).reshape((-1, self.field_size, 1))
+            Xi_valid = np.array(Xi_valid)
             Xv_valid = np.array(Xv_valid)
             y_valid = np.array(y_valid)
             x_valid_size = Xi_valid.shape[0]
@@ -358,8 +364,14 @@ class DeepFM(torch.nn.Module):
                 end = min(x_size, offset + self.batch_size)
                 if offset == end:
                     break
-                batch_xi = Variable(torch.LongTensor(Xi_train[offset:end]))
-                batch_xv = Variable(torch.FloatTensor(Xv_train[offset:end]))
+
+                # convert to sparse tensor
+                # batch_xi = Variable(torch.LongTensor(Xi_train[offset:end]))
+                # batch_xv = Variable(torch.FloatTensor(Xv_train[offset:end]))
+
+                batch_xi = Xi_train[offset: end]
+                batch_xv = Xv_train[offset: end]
+
                 batch_y = Variable(torch.FloatTensor(y_train[offset:end]))
                 if self.use_cuda:
                     batch_xi, batch_xv, batch_y = batch_xi.cuda(), batch_xv.cuda(), batch_y.cuda()
