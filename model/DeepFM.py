@@ -67,9 +67,9 @@ class DeepFM(torch.nn.Module):
     Attention: only support logsitcs regression
     """
 
-    def __init__(self, field_size, feature_sizes, embedding_size=100, is_shallow_dropout=True, dropout_shallow=[0.5, 0.5],
+    def __init__(self, field_size, feature_sizes, embedding_size=10, is_shallow_dropout=True, dropout_shallow=[0.5, 0.5],
                  h_depth=2, deep_layers=[32, 32], is_deep_dropout=True, dropout_deep=[0.5, 0.5, 0.5],
-                 deep_layers_activation='relu', n_epochs=64, batch_size=256, learning_rate=0.01,
+                 deep_layers_activation='relu', n_epochs=64, batch_size=256, learning_rate=0.0001,
                  optimizer_type='adam', is_batch_norm=False, verbose=False, random_seed=950104, weight_decay=0.0,
                  use_fm=True, use_ffm=False, use_deep=True, loss_type='logloss', eval_metric=roc_auc_score,
                  use_cuda=True, n_class=1, greater_is_better=True
@@ -255,7 +255,7 @@ class DeepFM(torch.nn.Module):
                 #                       enumerate(self.fm_second_order_embeddings)], 1)
                 emb = self.fm_second_order_embeddings[0]
                 deep_emb = []
-                for i in range(self.batch_size):
+                for i in range(len(Xi)):
                     deep_emb.append(torch.mm(emb(torch.LongTensor(Xi[i])).t(), torch.FloatTensor(Xv[i]).view(-1, 1)).t())
                 deep_emb = torch.cat(deep_emb, 0)
 
@@ -467,8 +467,10 @@ class DeepFM(torch.nn.Module):
             end = min(x_size, offset + batch_size)
             if offset == end:
                 break
-            batch_xi = Variable(torch.LongTensor(Xi[offset:end]))
-            batch_xv = Variable(torch.FloatTensor(Xv[offset:end]))
+            # batch_xi = Variable(torch.LongTensor(Xi[offset:end]))
+            # batch_xv = Variable(torch.FloatTensor(Xv[offset:end]))
+            batch_xi = Xi[offset:end]
+            batch_xv = Xv[offset:end]
             batch_y = Variable(torch.FloatTensor(y[offset:end]))
             if self.use_cuda:
                 batch_xi, batch_xv, batch_y = batch_xi.cuda(), batch_xv.cuda(), batch_y.cuda()
