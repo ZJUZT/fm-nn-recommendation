@@ -69,7 +69,7 @@ class DeepFM(torch.nn.Module):
 
     def __init__(self, field_size, feature_sizes, embedding_size=10, is_shallow_dropout=True, dropout_shallow=[0.5, 0.5],
                  h_depth=2, deep_layers=[32, 32], is_deep_dropout=True, dropout_deep=[0.5, 0.5, 0.5],
-                 deep_layers_activation='relu', n_epochs=64, batch_size=256, learning_rate=0.001,
+                 deep_layers_activation='relu', n_epochs=64, batch_size=256, learning_rate=0.01,
                  optimizer_type='adam', is_batch_norm=False, verbose=False, random_seed=950104, weight_decay=0.0,
                  use_fm=True, use_ffm=False, use_deep=True, loss_type='logloss', eval_metric=roc_auc_score,
                  use_cuda=True, n_class=1, greater_is_better=True
@@ -225,10 +225,12 @@ class DeepFM(torch.nn.Module):
             emb = self.fm_second_order_embeddings[0]
             fm_sum_second_order_emb_square = []
             fm_second_order_emb_square_sum = []
+            fm_second_order_emb_arr = []
             for i in range(len(Xi)):
                 # fm_second_order_emb_arr.append(emb(torch.LongTensor(Xi[i])) * torch.FloatTensor(Xv[i]).view(-1, 1))
                 tmp = emb(torch.LongTensor(Xi[i])) * torch.FloatTensor(Xv[i]).view(-1, 1)
                 square_sum = torch.sum(tmp, 0)
+                fm_second_order_emb_arr.append(square_sum.clone())
                 square_sum = square_sum * square_sum
                 fm_sum_second_order_emb_square.append(square_sum)
 
@@ -237,6 +239,7 @@ class DeepFM(torch.nn.Module):
 
             fm_sum_second_order_emb_square = torch.stack(fm_sum_second_order_emb_square)
             fm_second_order_emb_square_sum = torch.stack(fm_second_order_emb_square_sum)
+            fm_second_order_emb_arr = torch.stack(fm_second_order_emb_arr)
 
             # fm_second_order_emb_arr = torch.cat(fm_second_order_emb_arr, 0)
             # fm_sum_second_order_emb = sum(fm_second_order_emb_arr)
@@ -273,7 +276,7 @@ class DeepFM(torch.nn.Module):
         if self.use_deep:
             if self.use_fm:
                 # deep_emb = torch.cat(fm_second_order_emb_arr, 1)
-                pass
+                deep_emb = fm_second_order_emb_arr
             elif self.use_ffm:
                 deep_emb = torch.cat([sum(ffm_second_order_embs) for ffm_second_order_embs in ffm_second_order_emb_arr],
                                      1)
