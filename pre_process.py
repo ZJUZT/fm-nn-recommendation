@@ -9,8 +9,8 @@ import torch
 
 if __name__ == '__main__':
 
-    pass
-    # get_df_from_raw()
+    # pass
+    get_df_from_raw()
     # logging.info('use libsvm feature only: {}'.format(config['libsvm_feature_only']))
     # train_x, train_y, test_x, test_y = get_df_from_raw()
     # # model = LGBModel()

@@ -2,6 +2,8 @@
 import logging
 import pandas as pd
 from sklearn.datasets import load_svmlight_file, dump_svmlight_file
+from sklearn.feature_extraction.text import CountVectorizer
+
 from config import *
 import os.path
 from scipy import sparse
@@ -111,35 +113,33 @@ def get_df_from_raw():
     logging.info('converting test libsvm data')
     x_libsvm_test, y_libsvm_test = load_svmlight_file(config['test_data'] + '.libsvm')
 
-    # if config['libsvm_feature_only']:
-    #     return x_libsvm_train, y_libsvm_train, x_libsvm_test, y_libsvm_test
-    # else:
-    # append extra feature
-    # df_all = pd.concat([df_train, df_test])
-    #
-    # logging.info('encode vector feature')
-    #
-    # cv = CountVectorizer()
-    # fea = config['vector_feature'][0]
-    # cv.fit(df_all[fea])
-    # train_x = cv.transform(df_train[fea])
-    # test_x = cv.transform(df_test[fea])
+    df_all = pd.concat([df_train, df_test])
+    logging.info('encode vector feature')
+    cv = CountVectorizer()
+    fea = config['vector_feature'][0]
+    cv.fit(df_all[fea])
+    train_x = cv.transform(df_train[fea])
+    test_x = cv.transform(df_test[fea])
 
-    # for feature in config['vector_feature'][1:]:
-    #     cv.fit(df_all[feature])
-    #     train_a = cv.transform(df_train[feature])
-    #     test_a = cv.transform(df_test[feature])
-    #     train_x = sparse.hstack((train_x, train_a))
-    #     test_x = sparse.hstack((test_x, test_a))
-    #
-    # logging.info('vector feature encoded')
-    # logging.info('concat extra feature with original feature')
+    for feature in config['vector_feature'][1:]:
+        cv.fit(df_all[feature])
+        train_a = cv.transform(df_train[feature])
+        test_a = cv.transform(df_test[feature])
+        train_x = sparse.hstack((train_x, train_a))
+        test_x = sparse.hstack((test_x, test_a))
 
-    # train_x = sparse.hstack((train_x, x_libsvm_train))
-    # test_x = sparse.hstack((test_x, x_libsvm_test))
+    logging.info('vector feature encoded')
+    logging.info('concat extra feature with original feature')
 
-    # train_x = train_x.tocsr().astype(np.float64)
-    # test_x = test_x.tocsr().astype(np.float64)
+    train_x = sparse.hstack((train_x, x_libsvm_train))
+    test_x = sparse.hstack((test_x, x_libsvm_test))
+
+    train_x = train_x.tocsr().astype(np.float64)
+    test_x = test_x.tocsr().astype(np.float64)
+
+    logging.info('saving feature with log info')
+    dump_svmlight_file(train_x, y_libsvm_train, config['train_data'] + '_sparse.libsvm')
+    dump_svmlight_file(test_x, y_libsvm_test, config['test_data'] + '_sparse.libsvm')
 
     # append game vector information
     logging.info('generating game feature')
