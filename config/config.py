@@ -8,12 +8,12 @@ configuration for:
 
 config = {}
 
-config['train_data'] = 'data/130_train'
-config['test_data'] = 'data/130_test'
+# config['train_data'] = 'data/130_train'
+# config['test_data'] = 'data/130_test'
 config['game_vector'] = 'data/vec30.txt'
 
-config['train_game_feature'] = 'data/130_train_game'
-config['test_game_feature'] = 'data/130_test_game'
+# config['train_game_feature'] = 'data/130_train_game'
+# config['test_game_feature'] = 'data/130_test_game'
 
 """
 appid -- 游戏id
@@ -82,7 +82,7 @@ xgb = {
     'max_depth': 15,
     'reg_lambda': 0.1,
     'min_child_weight': 50,
-    'n_estimators': 50,
+    'n_estimators': 20,
     'subsample': 0.8,
     'colsample_bytree': 0.8,
     'eta': 0.1,
@@ -96,7 +96,7 @@ config['xgb'] = xgb
 
 # field info
 fields_index = [
-    (0, 1950)
+    (0, 2192)
     # (0, 28),
     # (28, 32),
     # (32, 33),
@@ -128,4 +128,4 @@ for k, v in field_dict.items():
 config['field_info'] = field_info
 
 config['field_size'] = len(fields_index)
-config['feature_size'] = [1950]
+config['feature_size'] = [2192]

@@ -10,6 +10,8 @@ from scipy import sparse
 import numpy as np
 import pickle
 
+from matplotlib import pyplot as plt
+
 
 def init_logger():
     logger = logging.getLogger()
@@ -86,96 +88,118 @@ def get_game_mean_feature(df, df_game):
     return game_feature
 
 
-def get_df_from_raw():
+def get_df_from_raw(train_data, test_data):
     """
     :return: training data frame & test data frame
     """
     logging.info('loading raw data')
-    df_train = pd.read_csv(config['train_data'], sep='\t', header=None,
+    df_train = pd.read_csv(train_data, sep='\t', header=None,
                            names=config['all_field'])
 
-    df_test = pd.read_csv(config['test_data'], sep='\t', header=None,
+    df_test = pd.read_csv(test_data, sep='\t', header=None,
                           names=config['all_field'])
 
     # save feature in libsvm format to file and reload it
 
-    if not os.path.exists(config['train_data'] + '.libsvm'):
+    if not os.path.exists(train_data + '.libsvm'):
         df_libsvm_train = pd.DataFrame(df_train, columns=['tag', 'feature'])
-        df_libsvm_train.to_csv(config['train_data'] + '.libsvm', index=False, header=False, sep='\t')
+        df_libsvm_train.to_csv(train_data + '.libsvm', index=False, header=False, sep='\t')
 
     logging.info('converting train libsvm data')
-    x_libsvm_train, y_libsvm_train = load_svmlight_file(config['train_data'] + '.libsvm')
+    x_libsvm_train, y_libsvm_train = load_svmlight_file(train_data + '.libsvm')
 
-    if not os.path.exists(config['test_data'] + '.libsvm'):
+    if not os.path.exists(test_data + '.libsvm'):
         df_libsvm_test = pd.DataFrame(df_test, columns=['tag', 'feature'])
-        df_libsvm_test.to_csv(config['test_data'] + '.libsvm', index=False, header=False, sep='\t')
+        df_libsvm_test.to_csv(test_data + '.libsvm', index=False, header=False, sep='\t')
 
     logging.info('converting test libsvm data')
-    x_libsvm_test, y_libsvm_test = load_svmlight_file(config['test_data'] + '.libsvm')
+    x_libsvm_test, y_libsvm_test = load_svmlight_file(test_data + '.libsvm')
 
-    df_all = pd.concat([df_train, df_test])
-    logging.info('encode vector feature')
-    cv = CountVectorizer()
-    fea = config['vector_feature'][0]
-    cv.fit(df_all[fea])
-    train_x = cv.transform(df_train[fea])
-    test_x = cv.transform(df_test[fea])
+    assert x_libsvm_train.shape[1] == x_libsvm_test.shape[1]
+    dim_ori = x_libsvm_train.shape[1]
+    logging.info('original train_x dimension: {}'.format(x_libsvm_train.shape))
+    logging.info('original test_x dimension: {}'.format(x_libsvm_test.shape))
 
-    for feature in config['vector_feature'][1:]:
-        cv.fit(df_all[feature])
-        train_a = cv.transform(df_train[feature])
-        test_a = cv.transform(df_test[feature])
-        train_x = sparse.hstack((train_x, train_a))
-        test_x = sparse.hstack((test_x, test_a))
-
-    logging.info('vector feature encoded')
-    logging.info('concat extra feature with original feature')
-
-    train_x = sparse.hstack((train_x, x_libsvm_train))
-    test_x = sparse.hstack((test_x, x_libsvm_test))
-
-    train_x = train_x.tocsr().astype(np.float64)
-    test_x = test_x.tocsr().astype(np.float64)
-
-    logging.info('saving feature with log info')
-    dump_svmlight_file(train_x, y_libsvm_train, config['train_data'] + '_sparse.libsvm')
-    dump_svmlight_file(test_x, y_libsvm_test, config['test_data'] + '_sparse.libsvm')
+    # df_all = pd.concat([df_train, df_test])
+    # logging.info('encode vector feature')
+    # cv = CountVectorizer(min_df=1000)
+    # fea = config['vector_feature'][0]
+    # cv.fit(df_all[fea])
+    # train_x = cv.transform(df_train[fea])
+    # test_x = cv.transform(df_test[fea])
+    #
+    # for feature in config['vector_feature'][1:]:
+    #     cv.fit(df_all[feature])
+    #     train_a = cv.transform(df_train[feature])
+    #     test_a = cv.transform(df_test[feature])
+    #     train_x = sparse.hstack((train_x, train_a))
+    #     test_x = sparse.hstack((test_x, test_a))
+    #
+    # logging.info('vector feature encoded')
+    # logging.info('concat extra feature with original feature')
+    #
+    # train_x = sparse.hstack((train_x, x_libsvm_train))
+    # test_x = sparse.hstack((test_x, x_libsvm_test))
+    #
+    # train_x = train_x.tocsr().astype(np.float64)
+    # test_x = test_x.tocsr().astype(np.float64)
+    #
+    # logging.info('saving feature with log info')
+    #
+    # assert train_x.shape[1] == test_x.shape[1]
+    # dim_with_log_info = train_x.shape[1]
+    # logging.info('sparse train_x dimension: {}'.format(train_x.shape))
+    # logging.info('sparse test_x dimension: {}'.format(test_x.shape))
+    #
+    # dump_svmlight_file(train_x, y_libsvm_train, train_data + '_sparse.libsvm')
+    # dump_svmlight_file(test_x, y_libsvm_test, test_data + '_sparse.libsvm')
 
     # append game vector information
     logging.info('generating game feature')
 
     logging.info('loading game vector')
 
-    df_game = pd.read_csv(config['game_vector'], sep='\t', header=None, names=['game_id', 'feature'])
+    if not os.path.exists(train_data + '_game.libsvm'):
+        df_game = pd.read_csv(config['game_vector'], sep='\t', header=None, names=['game_id', 'feature'])
 
-    if os.path.exists(config['train_game_feature']):
-        train_game_df = pd.read_csv(config['train_game_feature'], header=None)
+        if os.path.exists(train_data+'_game_vector'):
+            train_game_df = pd.read_csv(train_data+'_game_vector', header=None)
+        else:
+            logging.info('generate game feature for training samples')
+            train_game = get_game_mean_feature(df_train, df_game)
+
+            logging.info('save game feature for training samples')
+            train_game_df = pd.DataFrame(train_game)
+            train_game_df.to_csv(train_data+'_game_vector', header=None, index=False)
+
+        if os.path.exists(test_data+'_game_vector'):
+            test_game_df = pd.read_csv(test_data +'_game_vector', header=None)
+        else:
+            logging.info('generate game feature for test samples')
+            test_game = get_game_mean_feature(df_test, df_game)
+
+            logging.info('save game feature for test samples')
+            test_game_df = pd.DataFrame(test_game)
+            test_game_df.to_csv(test_data+'_game_vector', header=None, index=False)
+
+        train_x = sparse.hstack((x_libsvm_train, train_game_df))
+        test_x = sparse.hstack((x_libsvm_test, test_game_df))
+
+        logging.info('save extended feature')
+        dump_svmlight_file(train_x, y_libsvm_train, train_data + '_game.libsvm')
+        dump_svmlight_file(test_x, y_libsvm_test, test_data + '_game.libsvm')
     else:
-        logging.info('generate game feature for training samples')
-        train_game = get_game_mean_feature(df_train, df_game)
+        train_x, _ = load_svmlight_file(train_data + '_game.libsvm')
+        test_x, _ = load_svmlight_file(test_data + '_game.libsvm')
 
-        logging.info('save game feature for training samples')
-        train_game_df = pd.DataFrame(train_game)
-        train_game_df.to_csv(config['train_game_feature'], header=None, index=False)
+    assert train_x.shape[1] == test_x.shape[1]
+    dim_with_game = train_x.shape[1]
+    logging.info('train_x_game dimension: {}'.format(train_x.shape))
+    logging.info('test_x_game dimension: {}'.format(test_x.shape))
 
-    if os.path.exists(config['test_game_feature']):
-        test_game_df = pd.read_csv(config['test_game_feature'], header=None)
-    else:
-        logging.info('generate game feature for test samples')
-        test_game = get_game_mean_feature(df_test, df_game)
+    return dim_ori, dim_with_game
 
-        logging.info('save game feature for test samples')
-        test_game_df = pd.DataFrame(test_game)
-        test_game_df.to_csv(config['test_game_feature'], header=None, index=False)
-
-    train_x = sparse.hstack((x_libsvm_train, train_game_df))
-    test_x = sparse.hstack((x_libsvm_test, test_game_df))
-
-    logging.info('save extended feature')
-    dump_svmlight_file(train_x, y_libsvm_train, config['train_data'] + '_game.libsvm')
-    dump_svmlight_file(test_x, y_libsvm_test, config['test_data'] + '_game.libsvm')
-
-    return train_x, y_libsvm_train, test_x, y_libsvm_test
+    # return train_x, y_libsvm_train, test_x, y_libsvm_test
 
 
 def convert_to_ffm_format(in_file, out_file, field_info):
@@ -256,3 +280,53 @@ def get_deep_fm_data_format(in_file):
             pickle.dump(y, fp)
 
     return xi, xv, y
+
+
+def draw_metrics(metric_train_list, metric_test_list, model_list, metric_name, baseline_train, baseline_test, baseline_model, fig_name, save_path):
+    plt.clf()
+    fig, ax = plt.subplots(figsize=(10, 5))
+    color = ['coral', 'green']
+    for i in range(len(metric_train_list)):
+        ax.plot(metric_train_list[i], linewidth=1.5, color=color[i], linestyle='--', marker='*', label='{}_train'.format(model_list[i], metric_name))
+        ax.plot(metric_test_list[i], linewidth=1.5, color=color[i], marker='o', label='{}_test'.format(model_list[i], metric_name))
+
+    # draw baseline
+    ax.axhline(baseline_train, color='grey', linestyle='--', label=baseline_model+'_train')
+    ax.axhline(baseline_test, color='firebrick', label=baseline_model+'_test')
+    ax.set_title(fig_name)
+    ax.set_xlabel('epoch')
+    ax.set_ylabel(metric_name)
+    ax.grid(True)
+    ax.legend()
+    fig.savefig(save_path)
+
+
+if __name__ == '__main__':
+    metric_train_list = [
+        [0.7, 0.8, 0.9],
+        [0.8, 0.9, 0.95]
+    ]
+
+    metric_test_list = [
+        [0.6, 0.7, 0.8],
+        [0.75, 0.85, 0.92]
+    ]
+
+    model_list = ['FM', 'DeepFM']
+    metric_name = 'auc'
+
+    baseline_train = 0.5
+    baseline_test = 0.4
+
+    baseline_model = 'XgBoost'
+    fig_name = 'test'
+    save_path = '../fig/test.pdf'
+
+    draw_metrics(metric_train_list,
+                 metric_test_list,
+                 model_list,
+                 metric_name,
+                 baseline_train,
+                 baseline_test,
+                 baseline_model,
+                 fig_name, save_path)

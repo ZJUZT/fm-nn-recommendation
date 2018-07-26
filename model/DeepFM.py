@@ -26,6 +26,7 @@ import torch.optim as optim
 from torch.autograd import Variable
 
 import torch.backends.cudnn
+from utils import *
 
 """
     网络结构部分
@@ -67,9 +68,10 @@ class DeepFM(torch.nn.Module):
     Attention: only support logsitcs regression
     """
 
-    def __init__(self, field_size, feature_sizes, embedding_size=20, is_shallow_dropout=True, dropout_shallow=[0.5, 0.5],
+    def __init__(self, field_size, feature_sizes, embedding_size=20, is_shallow_dropout=True,
+                 dropout_shallow=[0.5, 0.5],
                  h_depth=2, deep_layers=[32, 32], is_deep_dropout=True, dropout_deep=[0.5, 0.5, 0.5],
-                 deep_layers_activation='relu', n_epochs=64, batch_size=256, learning_rate=0.01,
+                 deep_layers_activation='relu', n_epochs=20, batch_size=256, learning_rate=0.005,
                  optimizer_type='adam', is_batch_norm=False, verbose=False, random_seed=950104, weight_decay=0.0,
                  use_fm=True, use_ffm=False, use_deep=True, loss_type='logloss', eval_metric=roc_auc_score,
                  use_cuda=True, n_class=1, greater_is_better=True
@@ -206,11 +208,12 @@ class DeepFM(torch.nn.Module):
         """
         if self.use_fm:
             # fm_first_order_emb_arr = [(torch.sum(emb(Xi[:, i, :]), 1).t() * Xv[:, i]).t() for i, emb in
-                                      # enumerate(self.fm_first_order_embeddings)]
+            # enumerate(self.fm_first_order_embeddings)]
             emb = self.fm_first_order_embeddings[0]
             fm_first_order_emb_arr = []
             for i in range(len(Xi)):
-                fm_first_order_emb_arr.append(torch.mm(emb(torch.LongTensor(Xi[i])).t(), torch.FloatTensor(Xv[i]).view(-1, 1)).t())
+                fm_first_order_emb_arr.append(
+                    torch.mm(emb(torch.LongTensor(Xi[i])).t(), torch.FloatTensor(Xv[i]).view(-1, 1)).t())
             # fm_first_order_emb_arr = torch.cat(fm_first_order_emb_arr, 0)
 
             fm_first_order = torch.cat(fm_first_order_emb_arr, 1).t()
@@ -220,7 +223,7 @@ class DeepFM(torch.nn.Module):
             # use 2xy = (x+y)^2 - x^2 - y^2 reduce calculation
 
             # fm_second_order_emb_arr = [(torch.sum(emb(Xi[:, i, :]), 1).t() * Xv[:, i]).t() for i, emb in
-                                       # enumerate(self.fm_second_order_embeddings)]
+            # enumerate(self.fm_second_order_embeddings)]
 
             emb = self.fm_second_order_embeddings[0]
             fm_sum_second_order_emb_square = []
@@ -286,7 +289,8 @@ class DeepFM(torch.nn.Module):
                 emb = self.fm_second_order_embeddings[0]
                 deep_emb = []
                 for i in range(len(Xi)):
-                    deep_emb.append(torch.mm(emb(torch.LongTensor(Xi[i])).t(), torch.FloatTensor(Xv[i]).view(-1, 1)).t())
+                    deep_emb.append(
+                        torch.mm(emb(torch.LongTensor(Xi[i])).t(), torch.FloatTensor(Xv[i]).view(-1, 1)).t())
                 deep_emb = torch.cat(deep_emb, 0)
 
             if self.deep_layers_activation == 'sigmoid':
@@ -385,6 +389,8 @@ class DeepFM(torch.nn.Module):
 
         train_result = []
         valid_result = []
+        train_loss_record = []
+        valid_loss_record = []
         for epoch in range(self.n_epochs):
             total_loss = 0.0
             batch_iter = x_size // self.batch_size
@@ -412,7 +418,7 @@ class DeepFM(torch.nn.Module):
                 loss.backward()
                 optimizer.step()
 
-                total_loss += loss.data[0]
+                total_loss += loss.data.item()
                 if self.verbose:
                     if i % 100 == 99:  # print every 100 mini-batches
                         eval = self.evaluate(batch_xi, batch_xv, batch_y)
@@ -423,17 +429,19 @@ class DeepFM(torch.nn.Module):
 
             train_loss, train_eval = self.eval_by_batch(Xi_train, Xv_train, y_train, x_size)
             train_result.append(train_eval)
+            train_loss_record.append(train_loss)
             print('*' * 50)
-            print('[%d] loss: %.6f metric: %.6f time: %.1f s' %
-                  (epoch + 1, train_loss, train_eval, time() - epoch_begin_time))
+            logging.info('[%d] loss: %.6f metric: %.6f time: %.1f s' %
+                         (epoch + 1, train_loss, train_eval, time() - epoch_begin_time))
             print('*' * 50)
 
             if is_valid:
                 valid_loss, valid_eval = self.eval_by_batch(Xi_valid, Xv_valid, y_valid, x_valid_size)
                 valid_result.append(valid_eval)
+                valid_loss_record.append(valid_loss)
                 print('*' * 50)
-                print('[%d] loss: %.6f metric: %.6f time: %.1f s' %
-                      (epoch + 1, valid_loss, valid_eval, time() - epoch_begin_time))
+                logging.info('[%d] loss: %.6f metric: %.6f time: %.1f s' %
+                             (epoch + 1, valid_loss, valid_eval, time() - epoch_begin_time))
                 print('*' * 50)
             if save_path:
                 torch.save(self.state_dict(), save_path)
@@ -481,6 +489,7 @@ class DeepFM(torch.nn.Module):
                     break
             if self.verbose:
                 print("refit finished")
+        return train_result, train_loss_record, valid_result, valid_loss_record
 
     def eval_by_batch(self, Xi, Xv, y, x_size):
         total_loss = 0.0
@@ -508,7 +517,7 @@ class DeepFM(torch.nn.Module):
             pred = F.sigmoid(outputs).cpu()
             y_pred.extend(pred.data.numpy())
             loss = criterion(outputs, batch_y)
-            total_loss += loss.data[0] * (end - offset)
+            total_loss += loss.data.item() * (end - offset)
         total_metric = self.eval_metric(y, y_pred)
         return total_loss / x_size, total_metric
 

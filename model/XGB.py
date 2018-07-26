@@ -26,6 +26,8 @@ class XGBModel(BaseModel):
                      eval_metric=config['xgb']['eval_metric'],
                      early_stopping_rounds=config['xgb']['early_stopping_rounds'])
 
+        return self.clf.evals_result_
+
     def predict(self, x):
         return self.clf.predict_proba(x)[:, 1]
 
