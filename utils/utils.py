@@ -356,7 +356,7 @@ if __name__ == '__main__':
 
     baseline_model = 'XgBoost'
     fig_name = 'evaluation on game 71'
-    save_path = '../fig/71_auc.pdf'
+    save_path = '../fig/71_auc.jpg'
 
     draw_metrics(metric_train_list,
                  metric_test_list,

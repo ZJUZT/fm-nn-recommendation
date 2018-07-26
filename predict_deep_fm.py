@@ -6,7 +6,7 @@ from model import XGBModel
 
 if __name__ == '__main__':
 
-    game = [71, 87, 92, 116, 124, 130]
+    game = [87, 92, 116, 124, 130]
     train_data_list = ['data/{}_train'.format(i) for i in game]
     test_data_list = ['data/{}_test'.format(i) for i in game]
 
@@ -29,6 +29,7 @@ if __name__ == '__main__':
         x_train, y_train = load_svmlight_file(train_data_list[i]+'.libsvm')
         x_test, y_test = load_svmlight_file(test_data_list[i]+'.libsvm')
         res = xgb_model.fit(x_train, y_train, x_test, y_test)
+        del x_train, y_train, x_test, y_test
 
         baseline_train = res['validation_0']['auc'][-1]
         baseline_test = res['validation_1']['auc'][-1]
@@ -69,3 +70,5 @@ if __name__ == '__main__':
                      'XgBoost',
                      'evaluation on game {}'.format(game[i]),
                      'fig/{}_auc.pdf'.format(game[i]))
+
+        del xi_train, xv_train, y_train, xi_test, xv_test, y_test
