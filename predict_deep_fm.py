@@ -6,7 +6,7 @@ from model import XGBModel
 
 if __name__ == '__main__':
 
-    game = [87, 92, 116, 124, 130]
+    game = [116, 124, 130]
     train_data_list = ['data/{}_train'.format(i) for i in game]
     test_data_list = ['data/{}_test'.format(i) for i in game]
 
