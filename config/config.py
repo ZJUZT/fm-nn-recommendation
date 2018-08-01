@@ -95,37 +95,41 @@ xgb = {
 config['xgb'] = xgb
 
 # field info
-fields_index = [
-    (0, 2192)
-    # (0, 28),
-    # (28, 32),
-    # (32, 33),
-    # (33, 34),
-    # (34, 50),
-    # (50, 1950)
-    # (50, 200),
-    # (200, 350),
-    # (350, 500),
-    # (500, 650),
-    # (650, 800),
-    # (800, 950),
-    # (950, 1100),
-    # (1100, 1250),
-    # (1250, 1300),
-    # (1300, 1600),
-    # (1600, 1635),
-    # (1635, 1730),
-    # (1800, 1950)
-]
+# fields_index = [
+#     # (0, 2192)
+#     (0, 50),
+#     # (28, 32),
+#     # (32, 33),
+#     # (33, 34),
+#     # (34, 50),
+#     (50, 1950),
+#     # (200, 350),
+#     # (350, 500),
+#     # (500, 650),
+#     # (650, 800),
+#     # (800, 950),
+#     # (950, 1100),
+#     # (1100, 1250),
+#     # (1250, 1300),
+#     # (1300, 1600),
+#     # (1600, 1635),
+#     # (1635, 1730),
+#     # (1800, 1950)
+# ]
 
-field_dict = {k[0]: k[1] for k in zip(fields_index, range(len(fields_index)))}
+# field_dict = {k[0]: k[1] for k in zip(fields_index, range(len(fields_index)))}
+#
+# field_info = {}
+# for k, v in field_dict.items():
+#     for i in range(k[0], k[1]):
+#         field_info[i] = v
 
-field_info = {}
-for k, v in field_dict.items():
-    for i in range(k[0], k[1]):
-        field_info[i] = v
+field_info = [28, 34, 50, 200, 350, 500, 650, 800, 950, 1100, 1250, 1300, 1600, 1635, 1730, 1800, 1950]
+
+feature_size = [field_info[i] - field_info[i-1] if i > 0 else field_info[i] for i in range(len(field_info))]
+
 
 config['field_info'] = field_info
 
-config['field_size'] = len(fields_index)
-config['feature_size'] = [2192]
+config['field_size'] = len(field_info)
+config['feature_size'] = feature_size

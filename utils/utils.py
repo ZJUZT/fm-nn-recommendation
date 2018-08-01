@@ -234,7 +234,7 @@ def convert_to_ffm_format(in_file, out_file, field_info):
     logging.info('conversion done')
 
 
-def get_deep_fm_data_format(in_file):
+def get_deep_fm_data_format(in_file, field_info):
     """
     convert data in libsvm format into deep fm format
     :param in_file: file path in libsvm format
@@ -264,8 +264,37 @@ def get_deep_fm_data_format(in_file):
                 logging.debug('processed {} samples'.format(i))
             index, value = x[i].nonzero()[1].tolist(), list(filter(lambda a: a != 0, x[i].data.tolist()))
             assert len(index) == len(value)
-            xi.append(index)
-            xv.append(value)
+
+            # encoding field info
+            # one field may contain several non-zero index
+
+            p_field, p_feature = 0, 0
+            pre_field_max_idx = 0
+
+            field_feature_index_all = []
+            field_feature_value_all = []
+
+            field_feature_index = []
+            field_feature_value = []
+
+            while p_field < len(field_info):
+                field_idx_max = field_info[p_field]
+
+                while p_feature < len(index) and index[p_feature] < field_idx_max:
+                    field_feature_index.append(index[p_feature]-pre_field_max_idx)
+                    field_feature_value.append(value[p_feature])
+                    p_feature += 1
+
+                p_field += 1
+
+                field_feature_index_all.append(field_feature_index)
+                field_feature_value_all.append(field_feature_value)
+                field_feature_index = []
+                field_feature_value = []
+                pre_field_max_idx = field_idx_max
+
+            xi.append(field_feature_index_all)
+            xv.append(field_feature_value_all)
 
         logging.info('conversion done')
         logging.info('save data')

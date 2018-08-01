@@ -15,7 +15,7 @@ param = {'task': 'binary',
          'lr': 0.1,
          'lambda': 0.001,
          'metric': 'auc',
-         'k': 2,
+         'k': 10,
          'epoch': 100}
 
 # train model

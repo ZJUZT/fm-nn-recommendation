@@ -13,12 +13,12 @@ param = {'task': 'binary',
          'lr': 0.1,
          'lambda': 0.001,
          'metric': 'auc',
-         'k': 20,
+         'k': 100,
          'epoch': 100}
 
 # train model
 fm_model.fit(param, './model_dump')
 
 # predict
-fm_model.setTest('../data/130_test.libsvm')
+fm_model.setTest('data/130_test.libsvm')
 fm_model.predict('./model_dump', 'output.txt')

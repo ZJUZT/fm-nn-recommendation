@@ -68,7 +68,7 @@ class DeepFM(torch.nn.Module):
     Attention: only support logsitcs regression
     """
 
-    def __init__(self, field_size, feature_sizes, embedding_size=20, is_shallow_dropout=True,
+    def __init__(self, field_size, feature_sizes, embedding_size=5, is_shallow_dropout=True,
                  dropout_shallow=[0.5, 0.5],
                  h_depth=2, deep_layers=[32, 32], is_deep_dropout=True, dropout_deep=[0.5, 0.5, 0.5],
                  deep_layers_activation='relu', n_epochs=20, batch_size=256, learning_rate=0.005,
@@ -208,15 +208,19 @@ class DeepFM(torch.nn.Module):
         """
         if self.use_fm:
             # fm_first_order_emb_arr = [(torch.sum(emb(Xi[:, i, :]), 1).t() * Xv[:, i]).t() for i, emb in
-            # enumerate(self.fm_first_order_embeddings)]
-            emb = self.fm_first_order_embeddings[0]
+            #                           enumerate(self.fm_first_order_embeddings)]
             fm_first_order_emb_arr = []
             for i in range(len(Xi)):
-                fm_first_order_emb_arr.append(
-                    torch.mm(emb(torch.LongTensor(Xi[i])).t(), torch.FloatTensor(Xv[i]).view(-1, 1)).t())
+                first_emb_list = []
+                for j, emb in enumerate(self.fm_first_order_embeddings):
+                    if len(Xi[i][j]) > 0:
+                        first_emb_list.append(torch.mm(emb(torch.LongTensor(Xi[i][j])).t(),
+                                                       torch.FloatTensor(Xv[i][j]).view(-1, 1)).t())
+
+                fm_first_order_emb_arr.append(torch.sum(torch.cat(first_emb_list), dim=0))
             # fm_first_order_emb_arr = torch.cat(fm_first_order_emb_arr, 0)
 
-            fm_first_order = torch.cat(fm_first_order_emb_arr, 1).t()
+            fm_first_order = torch.cat(fm_first_order_emb_arr).view(1, -1)
             if self.is_shallow_dropout:
                 fm_first_order = self.fm_first_order_dropout(fm_first_order)
 
@@ -225,13 +229,21 @@ class DeepFM(torch.nn.Module):
             # fm_second_order_emb_arr = [(torch.sum(emb(Xi[:, i, :]), 1).t() * Xv[:, i]).t() for i, emb in
             # enumerate(self.fm_second_order_embeddings)]
 
-            emb = self.fm_second_order_embeddings[0]
             fm_sum_second_order_emb_square = []
             fm_second_order_emb_square_sum = []
             fm_second_order_emb_arr = []
             for i in range(len(Xi)):
                 # fm_second_order_emb_arr.append(emb(torch.LongTensor(Xi[i])) * torch.FloatTensor(Xv[i]).view(-1, 1))
-                tmp = emb(torch.LongTensor(Xi[i])) * torch.FloatTensor(Xv[i]).view(-1, 1)
+                second_emb_list = []
+                for j, emb in enumerate(self.fm_second_order_embeddings):
+                    if len(Xi[i][j]) > 0:
+                        second_emb_list.append(torch.mm(
+                            torch.FloatTensor(Xv[i][j]).view(-1, 1).t(), emb(torch.LongTensor(Xi[i][j]))
+                        ))
+                # tmp = torch.sum(torch.cat([emb(torch.LongTensor(Xi[i][j])) * torch.FloatTensor(Xv[i][j]).view(-1, 1)
+                #                            for j, emb in enumerate(self.fm_second_order_embeddings)]), dim=0)
+                # square_sum = torch.sum(tmp, 0)
+                tmp = torch.cat(second_emb_list, 0)
                 square_sum = torch.sum(tmp, 0)
                 fm_second_order_emb_arr.append(square_sum.clone())
                 square_sum = square_sum * square_sum
@@ -331,19 +343,20 @@ class DeepFM(torch.nn.Module):
         return total_sum
 
     def fit(self, Xi_train, Xv_train, y_train, Xi_valid=None, Xv_valid=None,
-            y_valid=None, ealry_stopping=False, refit=False, save_path=None):
+            y_valid=None, early_stopping=False, refit=False, save_path=None):
         """
         :param Xi_train: [[ind1_1, ind1_2, ...], [ind2_1, ind2_2, ...], ..., [indi_1, indi_2, ..., indi_j, ...], ...]
-                        indi_j is the feature index of feature field j of sample i in the training set
+                        indi_j is the list of feature index of feature field j of sample i in the training set
+                        support multiple non-zero values in one field
         :param Xv_train: [[val1_1, val1_2, ...], [val2_1, val2_2, ...], ..., [vali_1, vali_2, ..., vali_j, ...], ...]
-                        vali_j is the feature value of feature field j of sample i in the training set
+                        vali_j is the list of feature value of feature field j of sample i in the training set
                         vali_j can be either binary (1/0, for binary/categorical features) or float (e.g., 10.24, for numerical features)
         :param y_train: label of each sample in the training set
         :param Xi_valid: list of list of feature indices of each sample in the validation set
         :param Xv_valid: list of list of feature values of each sample in the validation set
         :param y_valid: label of each sample in the validation set
-        :param ealry_stopping: perform early stopping or not
-        :param refit: refit the model on the train+valid dataset or not
+        :param early_stopping: perform early stopping or not
+        :param refit: refit the model on the train+valid data set or not
         :param save_path: the path to save the model
         :return:
         """
@@ -445,7 +458,7 @@ class DeepFM(torch.nn.Module):
                 print('*' * 50)
             if save_path:
                 torch.save(self.state_dict(), save_path)
-            if is_valid and ealry_stopping and self.training_termination(valid_result):
+            if is_valid and early_stopping and self.training_termination(valid_result):
                 print("early stop at [%d] epoch!" % (epoch + 1))
                 break
 
