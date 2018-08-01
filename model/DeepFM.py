@@ -71,7 +71,7 @@ class DeepFM(torch.nn.Module):
     def __init__(self, field_size, feature_sizes, embedding_size=5, is_shallow_dropout=True,
                  dropout_shallow=[0.5, 0.5],
                  h_depth=2, deep_layers=[32, 32], is_deep_dropout=True, dropout_deep=[0.5, 0.5, 0.5],
-                 deep_layers_activation='relu', n_epochs=20, batch_size=256, learning_rate=0.005,
+                 deep_layers_activation='relu', n_epochs=20, batch_size=256, learning_rate=0.01,
                  optimizer_type='adam', is_batch_norm=False, verbose=False, random_seed=950104, weight_decay=0.0,
                  use_fm=True, use_ffm=False, use_deep=True, loss_type='logloss', eval_metric=roc_auc_score,
                  use_cuda=True, n_class=1, greater_is_better=True
@@ -234,12 +234,18 @@ class DeepFM(torch.nn.Module):
             fm_second_order_emb_arr = []
             for i in range(len(Xi)):
                 # fm_second_order_emb_arr.append(emb(torch.LongTensor(Xi[i])) * torch.FloatTensor(Xv[i]).view(-1, 1))
-                second_emb_list = []
-                for j, emb in enumerate(self.fm_second_order_embeddings):
-                    if len(Xi[i][j]) > 0:
-                        second_emb_list.append(torch.mm(
-                            torch.FloatTensor(Xv[i][j]).view(-1, 1).t(), emb(torch.LongTensor(Xi[i][j]))
-                        ))
+                # second_emb_list = []
+                # for j, emb in enumerate(self.fm_second_order_embeddings):
+                #     if len(Xi[i][j]) > 0:
+                #         second_emb_list.append(torch.mm(
+                #             torch.FloatTensor(Xv[i][j]).view(-1, 1).t(), emb(torch.LongTensor(Xi[i][j]))
+                #         ))
+
+                second_emb_list = [torch.mm(
+                    torch.FloatTensor(Xv[i][j]).view(-1, 1).t(), emb(torch.LongTensor(Xi[i][j]))
+                ) if len(Xi[i][j]) > 0 else torch.zeros([1, self.embedding_size])
+                    for j, emb in enumerate(self.fm_second_order_embeddings)
+                ]
                 # tmp = torch.sum(torch.cat([emb(torch.LongTensor(Xi[i][j])) * torch.FloatTensor(Xv[i][j]).view(-1, 1)
                 #                            for j, emb in enumerate(self.fm_second_order_embeddings)]), dim=0)
                 # square_sum = torch.sum(tmp, 0)
