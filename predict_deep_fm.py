@@ -51,7 +51,7 @@ if __name__ == '__main__':
 
         # deep fm
         deep_fm = DeepFM.DeepFM(config['field_size'], config['feature_size'], verbose=True, use_cuda=True,
-                                weight_decay=0.0001, use_fm=True, use_ffm=False, use_deep=False)
+                                weight_decay=0.0001, use_fm=True, use_ffm=False, use_deep=True)
         train_auc, train_loss, valid_auc, valid_loss = \
             deep_fm.fit(xi_train, xv_train, y_train, xi_test, xv_test, y_test, early_stopping=True, refit=False)
         metric_train_auc.append(train_auc)
