@@ -22,8 +22,8 @@ if __name__ == '__main__':
         model_list = ['FM', 'DeepFM']
 
         # append xgboost leaf index feature
-        # xgb = XgboostFeature()
-        # xgb.fit_model_split(train_data_list[i] + '.libsvm', test_data_list[i] + '.libsvm')
+        xgb = XgboostFeature()
+        xgb.fit_model(train_data_list[i] + '.libsvm', test_data_list[i] + '.libsvm')
 
         # logging.info('prepare data for XgBoost')
         # dim_ori, dim_with_game = get_df_from_raw(train_data_list[i], test_data_list[i])

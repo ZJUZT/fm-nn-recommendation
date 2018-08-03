@@ -91,7 +91,7 @@ class XgboostFeature():
         # return X_train_new2, y_train_2, X_test_new, y_test
 
     ##整体训练
-    def fit_model(self, x_train, y_train, x_test, y_test, is_concat=False):
+    def fit_model(self, train_data_path, test_data_path, is_concat=True):
         clf = XGBClassifier(
             learning_rate=self.learning_rate,
             n_estimators=self.n_estimators,
@@ -106,6 +106,10 @@ class XgboostFeature():
             reg_alpha=self.reg_alpha,
             reg_lambda=self.reg_lambda,
             seed=self.seed)
+
+        logging.info('load data')
+        x_train, y_train = load_svmlight_file(train_data_path)
+        x_test, y_test = load_svmlight_file(test_data_path)
 
         clf.fit(x_train, y_train,
                 eval_set=[(x_train, y_train), (x_test, y_test)],
@@ -131,4 +135,6 @@ class XgboostFeature():
         logging.info('transformed training data dimension: {}'.format(x_train_new.shape))
         logging.info('transformed test data dimension: {}'.format(x_test_new.shape))
 
-        return x_train_new, y_train, x_test_new, y_test
+        logging.info('save xgboost extended feature')
+        dump_svmlight_file(x_train_new, y_train, train_data_path + '_xgboost')
+        dump_svmlight_file(x_test_new, y_test, test_data_path + '_xgboost')
