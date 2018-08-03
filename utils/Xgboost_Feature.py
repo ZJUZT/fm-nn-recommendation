@@ -1,19 +1,20 @@
 # coding: utf-8
+from utils import *
+from sklearn.preprocessing import OneHotEncoder
 from sklearn.model_selection import train_test_split
 from sklearn import metrics
 from xgboost.sklearn import XGBClassifier
 import numpy as np
 from scipy.sparse import hstack, vstack
-from utils import *
-from sklearn.preprocessing import OneHotEncoder
+
 
 
 class XgboostFeature():
     # 可以传入xgboost的参数
     # 常用传入特征的个数 即树的个数 默认30
-    def __init__(self, n_estimators=30,
+    def __init__(self, n_estimators=20,
                  learning_rate=0.1,
-                 max_depth=5,
+                 max_depth=15,
                  min_child_weight=1,
                  gamma=0.3,
                  subsample=0.8,
@@ -39,10 +40,14 @@ class XgboostFeature():
         self.seed = seed
 
     ##切割训练
-    def fit_model_split(self, X_train, y_train, X_test, y_test):
+    def fit_model_split(self, train_data_path, test_data_path):
         # X_train_1用于生成模型  X_train_2用于和新特征组成新训练集合
 
         logging.info('split train data for gbdt model and feature transformation separately')
+        logging.info('load data')
+        X_train, y_train = load_svmlight_file(train_data_path)
+        X_test, y_test = load_svmlight_file(test_data_path)
+
         X_train_1, X_train_2, y_train_1, y_train_2 = train_test_split(X_train, y_train, test_size=0.6, random_state=0)
         clf = XGBClassifier(
             learning_rate=self.learning_rate,
@@ -79,7 +84,11 @@ class XgboostFeature():
         logging.info('transformed training data dimension: {}'.format(X_train_new2.shape))
         logging.info('transformed test data dimension: {}'.format(X_test_new.shape))
 
-        return X_train_new2, y_train_2, X_test_new, y_test
+        logging.info('save xgboost extended feature')
+        dump_svmlight_file(X_train_new2, y_train_2, train_data_path+'_xgboost')
+        dump_svmlight_file(X_test_new, y_test, test_data_path+'_xgboost')
+
+        # return X_train_new2, y_train_2, X_test_new, y_test
 
     ##整体训练
     def fit_model(self, x_train, y_train, x_test, y_test, is_concat=False):

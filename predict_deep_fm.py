@@ -6,7 +6,7 @@ from model import XGBModel
 
 if __name__ == '__main__':
 
-    game = [130]
+    game = [71]
     train_data_list = ['data/{}_train'.format(i) for i in game]
     test_data_list = ['data/{}_test'.format(i) for i in game]
 
@@ -20,6 +20,10 @@ if __name__ == '__main__':
         metric_test_log_loss = []
 
         model_list = ['FM', 'DeepFM']
+
+        # append xgboost leaf index feature
+        # xgb = XgboostFeature()
+        # xgb.fit_model_split(train_data_list[i] + '.libsvm', test_data_list[i] + '.libsvm')
 
         # logging.info('prepare data for XgBoost')
         # dim_ori, dim_with_game = get_df_from_raw(train_data_list[i], test_data_list[i])
@@ -37,8 +41,8 @@ if __name__ == '__main__':
         # logging.info('XgBoost AUC (train): {}'.format(baseline_train))
         # logging.info('XgBoost AUC (test): {}'.format(baseline_test))
         # fm
-        xi_train, xv_train, y_train = get_deep_fm_data_format(train_data_list[i] + '.libsvm', config['field_info'])
-        xi_test, xv_test, y_test = get_deep_fm_data_format(test_data_list[i] + '.libsvm', config['field_info'])
+        xi_train, xv_train, y_train = get_deep_fm_data_format(train_data_list[i] + '.libsvm_xgboost', config['field_info'])
+        xi_test, xv_test, y_test = get_deep_fm_data_format(test_data_list[i] + '.libsvm_xgboost', config['field_info'])
 
         # deep_fm = DeepFM.DeepFM(1, [dim_ori], verbose=True, use_cuda=True,
         #                         weight_decay=0.0001, use_fm=True, use_ffm=False, use_deep=False)

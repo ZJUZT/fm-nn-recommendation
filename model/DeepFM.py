@@ -65,7 +65,7 @@ class DeepFM(torch.nn.Module):
     greater_is_better: bool. Is the greater eval better?
 
 
-    Attention: only support logsitcs regression
+    Attention: only support logistics regression
     """
 
     def __init__(self, field_size, feature_sizes, embedding_size=10, is_shallow_dropout=True,
@@ -210,39 +210,39 @@ class DeepFM(torch.nn.Module):
             # fm_first_order_emb_arr = [(torch.sum(emb(Xi[:, i, :]), 1).t() * Xv[:, i]).t() for i, emb in
             #                           enumerate(self.fm_first_order_embeddings)]
 
-            """
-            
-            fm_first_order_emb_arr = []
-            for i in range(len(Xi)):
-                first_emb_list = [torch.mm(
-                    torch.FloatTensor(Xv[i][j]).view(-1, 1).t(), emb(torch.LongTensor(Xi[i][j]))
-                ) if len(Xi[i][j]) > 0 else torch.FloatTensor([[0.0]])
-                    for j, emb in enumerate(self.fm_first_order_embeddings)
-                ]
-
-                fm_first_order_emb_arr.append(torch.sum(torch.cat(first_emb_list)))
-
-            fm_first_order = torch.FloatTensor(fm_first_order_emb_arr).view(-1, 1)
-            if self.is_shallow_dropout:
-                fm_first_order = self.fm_first_order_dropout(fm_first_order)
-            """
+            # """
+            # """
 
             # use 2xy = (x+y)^2 - x^2 - y^2 reduce calculation
 
             # fm_second_order_emb_arr = [(torch.sum(emb(Xi[:, i, :]), 1).t() * Xv[:, i]).t() for i, emb in
             # enumerate(self.fm_second_order_embeddings)]
 
+            # fm_first_order_emb_arr = []
             fm_sum_second_order_emb_square = []
             fm_second_order_emb_square_sum = []
             fm_second_order_emb_arr = []
             fm_deep_embedding = []
             for i in range(len(Xi)):
+                # first_emb_list = [torch.mm(
+                #     torch.FloatTensor(Xv[i][j]).view(-1, 1).t(), emb(torch.LongTensor(Xi[i][j]))
+                # ) if len(Xi[i][j]) > 0 else torch.FloatTensor([[0.0]])
+                #                   for j, emb in enumerate(self.fm_first_order_embeddings)
+                #                   ]
+                #
+                # fm_first_order_emb_arr.append(torch.sum(torch.cat(first_emb_list)))
 
                 second_emb_list = [torch.mm(
                     torch.FloatTensor(Xv[i][j]).view(-1, 1).t(), emb(torch.LongTensor(Xi[i][j]))
                 ) if len(Xi[i][j]) > 0 else torch.zeros([1, self.embedding_size])
                     for j, emb in enumerate(self.fm_second_order_embeddings)
                 ]
+
+                # second_emb_list = []
+                # for j, emb in enumerate(self.fm_second_order_embeddings):
+                #     torch.mm(
+                #         torch.FloatTensor(Xv[i][j]).view(-1, 1).t(), emb(torch.LongTensor(Xi[i][j]))
+                #     ) if len(Xi[i][j]) > 0 else torch.zeros([1, self.embedding_size])
                 # tmp = torch.sum(torch.cat([emb(torch.LongTensor(Xi[i][j])) * torch.FloatTensor(Xv[i][j]).view(-1, 1)
                 #                            for j, emb in enumerate(self.fm_second_order_embeddings)]), dim=0)
                 # square_sum = torch.sum(tmp, 0)
@@ -255,6 +255,10 @@ class DeepFM(torch.nn.Module):
 
                 sum_square = torch.sum(tmp * tmp, 0)
                 fm_second_order_emb_square_sum.append(sum_square)
+
+            # fm_first_order = torch.FloatTensor(fm_first_order_emb_arr).view(-1, 1)
+            # if self.is_shallow_dropout:
+            #     fm_first_order = self.fm_first_order_dropout(fm_first_order)
 
             fm_deep_embedding = torch.cat(fm_deep_embedding)
             fm_sum_second_order_emb_square = torch.stack(fm_sum_second_order_emb_square)
