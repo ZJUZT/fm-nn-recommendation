@@ -207,30 +207,19 @@ class DeepFM(torch.nn.Module):
             fm part
         """
         if self.use_fm:
-            # fm_first_order_emb_arr = [(torch.sum(emb(Xi[:, i, :]), 1).t() * Xv[:, i]).t() for i, emb in
-            #                           enumerate(self.fm_first_order_embeddings)]
 
-            # """
-            # """
-
-            # use 2xy = (x+y)^2 - x^2 - y^2 reduce calculation
-
-            # fm_second_order_emb_arr = [(torch.sum(emb(Xi[:, i, :]), 1).t() * Xv[:, i]).t() for i, emb in
-            # enumerate(self.fm_second_order_embeddings)]
-
-            # fm_first_order_emb_arr = []
+            fm_first_order_emb_arr = []
             fm_sum_second_order_emb_square = []
             fm_second_order_emb_square_sum = []
             fm_second_order_emb_arr = []
             fm_deep_embedding = []
             for i in range(len(Xi)):
-                # first_emb_list = [torch.mm(
-                #     torch.FloatTensor(Xv[i][j]).view(-1, 1).t(), emb(torch.LongTensor(Xi[i][j]))
-                # ) if len(Xi[i][j]) > 0 else torch.FloatTensor([[0.0]])
-                #                   for j, emb in enumerate(self.fm_first_order_embeddings)
-                #                   ]
-                #
-                # fm_first_order_emb_arr.append(torch.sum(torch.cat(first_emb_list)))
+                first_emb_list = [torch.mm(
+                    torch.FloatTensor(Xv[i][j]).view(-1, 1).t(), emb(torch.LongTensor(Xi[i][j])))
+                    if len(Xi[i][j]) > 0 else torch.FloatTensor([[0.0]])
+                    for j, emb in enumerate(self.fm_first_order_embeddings)
+                    ]
+                fm_first_order_emb_arr.append(torch.sum(torch.cat(first_emb_list)))
 
                 second_emb_list = [torch.mm(
                     torch.FloatTensor(Xv[i][j]).view(-1, 1).t(), emb(torch.LongTensor(Xi[i][j]))
@@ -238,14 +227,6 @@ class DeepFM(torch.nn.Module):
                     for j, emb in enumerate(self.fm_second_order_embeddings)
                 ]
 
-                # second_emb_list = []
-                # for j, emb in enumerate(self.fm_second_order_embeddings):
-                #     torch.mm(
-                #         torch.FloatTensor(Xv[i][j]).view(-1, 1).t(), emb(torch.LongTensor(Xi[i][j]))
-                #     ) if len(Xi[i][j]) > 0 else torch.zeros([1, self.embedding_size])
-                # tmp = torch.sum(torch.cat([emb(torch.LongTensor(Xi[i][j])) * torch.FloatTensor(Xv[i][j]).view(-1, 1)
-                #                            for j, emb in enumerate(self.fm_second_order_embeddings)]), dim=0)
-                # square_sum = torch.sum(tmp, 0)
                 fm_deep_embedding.append(torch.cat(second_emb_list, 1))
                 tmp = torch.cat(second_emb_list, 0)
                 square_sum = torch.sum(tmp, 0)
@@ -256,21 +237,13 @@ class DeepFM(torch.nn.Module):
                 sum_square = torch.sum(tmp * tmp, 0)
                 fm_second_order_emb_square_sum.append(sum_square)
 
-            # fm_first_order = torch.FloatTensor(fm_first_order_emb_arr).view(-1, 1)
-            # if self.is_shallow_dropout:
-            #     fm_first_order = self.fm_first_order_dropout(fm_first_order)
+            fm_first_order = torch.FloatTensor(fm_first_order_emb_arr).view(-1, 1)
+            if self.is_shallow_dropout:
+                fm_first_order = self.fm_first_order_dropout(fm_first_order)
 
             fm_deep_embedding = torch.cat(fm_deep_embedding)
             fm_sum_second_order_emb_square = torch.stack(fm_sum_second_order_emb_square)
             fm_second_order_emb_square_sum = torch.stack(fm_second_order_emb_square_sum)
-            # fm_second_order_emb_arr = torch.stack(fm_second_order_emb_arr)
-
-            # fm_second_order_emb_arr = torch.cat(fm_second_order_emb_arr, 0)
-            # fm_sum_second_order_emb = sum(fm_second_order_emb_arr)
-            # fm_sum_second_order_emb = torch.stack(fm_second_order_emb_arr)
-            # fm_sum_second_order_emb_square = fm_sum_second_order_emb * fm_sum_second_order_emb  # (x+y)^2
-            # fm_second_order_emb_square = [item * item for item in fm_second_order_emb_arr]
-            # fm_second_order_emb_square_sum = sum(fm_second_order_emb_square)  # x^2+y^2
             fm_second_order = (fm_sum_second_order_emb_square - fm_second_order_emb_square_sum) * 0.5
             if self.is_shallow_dropout:
                 fm_second_order = self.fm_second_order_dropout(fm_second_order)
@@ -279,6 +252,39 @@ class DeepFM(torch.nn.Module):
             ffm part
         """
         if self.use_ffm:
+            ffm_first_order_emb_arr = []
+            ffm_second_order_emb_arr = []
+            ffm_deep_embedding = []
+            for i in range(len(Xi)):
+                # first order
+                first_emb_list = [torch.mm(
+                    torch.FloatTensor(Xv[i][j]).view(-1, 1).t(), emb(torch.LongTensor(Xi[i][j])))
+                    if len(Xi[i][j]) > 0 else torch.FloatTensor([[0.0]])
+                    for j, emb in enumerate(self.ffm_first_order_embeddings)
+                    ]
+                ffm_first_order_emb_arr.append(torch.sum(torch.cat(first_emb_list)))
+
+                # second order
+                ffm_second_order_emb_arr = [[torch.mm(
+                    torch.FloatTensor(Xv[i][j]).view(-1, 1).t(), emb(torch.LongTensor(Xi[i][j]))
+                ) if len(Xi[i][j]) > 0 else torch.zeros([1, self.embedding_size]) for emb in f_embs]
+                    for j, f_embs in enumerate(self.ffm_second_order_embeddings)
+                ]
+
+                ffm_deep_embedding.append([sum(ffm_second_order_embs) for ffm_second_order_embs in
+                    ffm_second_order_emb_arr])
+
+                ffm_wij_arr = []
+                for i in range(self.field_size):
+                    for j in range(i + 1, self.field_size):
+                        ffm_wij_arr.append(ffm_second_order_emb_arr[i][j] * ffm_second_order_emb_arr[j][i])
+                ffm_second_order.append(sum(ffm_wij_arr))
+
+            ffm_first_order = torch.FloatTensor(ffm_first_order_emb_arr).view(-1, 1)
+            ffm_second_order = torch.cat(ffm_second_order)
+            ffm_deep_embedding = torch.cat(ffm_deep_embedding)
+
+            """
             ffm_first_order_emb_arr = [(torch.sum(emb(Xi[:, i, :]), 1).t() * Xv[:, i]).t() for i, emb in
                                        enumerate(self.ffm_first_order_embeddings)]
             ffm_first_order = torch.cat(ffm_first_order_emb_arr, 1)
@@ -293,6 +299,7 @@ class DeepFM(torch.nn.Module):
             ffm_second_order = sum(ffm_wij_arr)
             if self.is_shallow_dropout:
                 ffm_second_order = self.ffm_second_order_dropout(ffm_second_order)
+            """
 
         """
             deep part
@@ -302,8 +309,7 @@ class DeepFM(torch.nn.Module):
                 # deep_emb = torch.cat(fm_second_order_emb_arr, 1)
                 deep_emb = fm_deep_embedding
             elif self.use_ffm:
-                deep_emb = torch.cat([sum(ffm_second_order_embs) for ffm_second_order_embs in ffm_second_order_emb_arr],
-                                     1)
+                deep_emb = ffm_deep_embedding
             else:
                 # deep_emb = torch.cat([(torch.sum(emb(Xi[:, i, :]), 1).t() * Xv[:, i]).t() for i, emb in
                 #                       enumerate(self.fm_second_order_embeddings)], 1)
@@ -339,14 +345,14 @@ class DeepFM(torch.nn.Module):
             sum
         """
         if self.use_fm and self.use_deep:
-            # total_sum = torch.sum(fm_first_order, 1) + torch.sum(fm_second_order, 1) + torch.sum(x_deep, 1) + self.bias
-            total_sum = torch.sum(fm_second_order, 1) + torch.sum(x_deep, 1) + self.bias
+            total_sum = torch.sum(fm_first_order, 1) + torch.sum(fm_second_order, 1) + torch.sum(x_deep, 1) + self.bias
+            # total_sum = torch.sum(fm_second_order, 1) + torch.sum(x_deep, 1) + self.bias
         elif self.use_ffm and self.use_deep:
             total_sum = torch.sum(ffm_first_order, 1) + torch.sum(ffm_second_order, 1) + torch.sum(x_deep,
                                                                                                    1) + self.bias
         elif self.use_fm:
-            # total_sum = torch.sum(fm_first_order, 1) + torch.sum(fm_second_order, 1) + self.bias
-            total_sum = torch.sum(fm_second_order, 1) + self.bias
+            total_sum = torch.sum(fm_first_order, 1) + torch.sum(fm_second_order, 1) + self.bias
+            # total_sum = torch.sum(fm_second_order, 1) + self.bias
         elif self.use_ffm:
             total_sum = torch.sum(ffm_first_order, 1) + torch.sum(ffm_second_order, 1) + self.bias
         else:

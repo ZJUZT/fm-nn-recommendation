@@ -124,7 +124,7 @@ config['xgb'] = xgb
 #     for i in range(k[0], k[1]):
 #         field_info[i] = v
 
-field_info = [29, 35, 51, 201, 351, 501, 651, 801, 951, 1101, 1251, 1301, 1601, 1636, 1731, 1801, 1951, 14182]
+field_info = [29, 35, 51, 201, 351, 501, 651, 801, 951, 1101, 1251, 1301, 1601, 1636, 1731, 1801, 1950]
 # field_info = [35, 1951]
 
 feature_size = [field_info[i] - field_info[i-1] if i > 0 else field_info[i] + 1 for i in range(len(field_info))]

@@ -26,13 +26,13 @@ if __name__ == '__main__':
         # xgb.fit_model(train_data_list[i] + '.libsvm', test_data_list[i] + '.libsvm')
 
         # logging.info('prepare data for XgBoost')
-        # dim_ori, dim_with_game = get_df_from_raw(train_data_list[i], test_data_list[i])
+        get_df_from_raw(train_data_list[i], test_data_list[i])
 
         # XgBoost baseline
-        xgb_model = XGBModel()
-        x_train, y_train = load_svmlight_file(train_data_list[i]+'.libsvm')
-        x_test, y_test = load_svmlight_file(test_data_list[i]+'.libsvm')
-        res = xgb_model.fit(x_train, y_train, x_test, y_test)
+        # xgb_model = XGBModel()
+        # x_train, y_train = load_svmlight_file(train_data_list[i]+'.libsvm')
+        # x_test, y_test = load_svmlight_file(test_data_list[i]+'.libsvm')
+        # res = xgb_model.fit(x_train, y_train, x_test, y_test)
         # del x_train, y_train, x_test, y_test
         #
         # baseline_train = res['validation_0']['auc'][-1]
@@ -44,8 +44,8 @@ if __name__ == '__main__':
         xi_train, xv_train, y_train = get_deep_fm_data_format(train_data_list[i] + '.libsvm', config['field_info'])
         xi_test, xv_test, y_test = get_deep_fm_data_format(test_data_list[i] + '.libsvm', config['field_info'])
 
-        deep_fm = DeepFM.DeepFM(config['field_size'], config['feature_size'], verbose=True, use_cuda=True,
-                                weight_decay=0.0001, use_fm=True, use_ffm=False, use_deep=False)
+        # deep_fm = DeepFM.DeepFM(config['field_size'], config['feature_size'], verbose=True, use_cuda=True,
+        #                        weight_decay=0.0001, use_fm=True, use_ffm=False, use_deep=False)
         # train_auc, train_loss, valid_auc, valid_loss = \
         #     deep_fm.fit(xi_train, xv_train, y_train, xi_test, xv_test, y_test, ealry_stopping=True, refit=False)
         # metric_train_auc.append(train_auc)
@@ -54,8 +54,8 @@ if __name__ == '__main__':
         # metric_test_log_loss.append(valid_loss)
 
         # deep fm
-        # deep_fm = DeepFM.DeepFM(config['field_size'], config['feature_size'], verbose=True, use_cuda=True,
-        #                         weight_decay=0.0001, use_fm=True, use_ffm=False, use_deep=True)
+        deep_fm = DeepFM.DeepFM(config['field_size'], config['feature_size'], verbose=True, use_cuda=False,
+                                 weight_decay=0.0001, use_fm=False, use_ffm=True, use_deep=True)
         train_auc, train_loss, valid_auc, valid_loss = \
             deep_fm.fit(xi_train, xv_train, y_train, xi_test, xv_test, y_test, early_stopping=True, refit=False)
         metric_train_auc.append(train_auc)

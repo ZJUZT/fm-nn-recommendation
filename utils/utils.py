@@ -120,6 +120,8 @@ def get_df_from_raw(train_data, test_data):
     logging.info('original train_x dimension: {}'.format(x_libsvm_train.shape))
     logging.info('original test_x dimension: {}'.format(x_libsvm_test.shape))
 
+    return
+
     # df_all = pd.concat([df_train, df_test])
     # logging.info('encode vector feature')
     # cv = CountVectorizer(min_df=1000)
