@@ -253,7 +253,7 @@ class DeepFM(torch.nn.Module):
         """
         if self.use_ffm:
             ffm_first_order_emb_arr = []
-            ffm_second_order_emb_arr = []
+            ffm_second_order = []
             ffm_deep_embedding = []
             for i in range(len(Xi)):
                 # first order
@@ -271,8 +271,10 @@ class DeepFM(torch.nn.Module):
                     for j, f_embs in enumerate(self.ffm_second_order_embeddings)
                 ]
 
-                ffm_deep_embedding.append([sum(ffm_second_order_embs) for ffm_second_order_embs in
-                    ffm_second_order_emb_arr])
+                deep_input = ([sum(ffm_second_order_embs)
+                                           for ffm_second_order_embs in ffm_second_order_emb_arr])
+
+                ffm_deep_embedding.append(torch.cat(deep_input, 1))
 
                 ffm_wij_arr = []
                 for i in range(self.field_size):

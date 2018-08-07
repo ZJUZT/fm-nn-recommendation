@@ -11,7 +11,6 @@ if __name__ == '__main__':
     test_data_list = ['data/{}_test'.format(i) for i in game]
 
     for i in range(len(train_data_list)):
-
         logging.info('evaluation on: {}'.format(train_data_list[i]))
 
         metric_train_auc = []
@@ -55,7 +54,7 @@ if __name__ == '__main__':
 
         # deep fm
         deep_fm = DeepFM.DeepFM(config['field_size'], config['feature_size'], verbose=True, use_cuda=False,
-                                 weight_decay=0.0001, use_fm=False, use_ffm=True, use_deep=True)
+                                weight_decay=0.0001, use_fm=False, use_ffm=True, use_deep=True)
         train_auc, train_loss, valid_auc, valid_loss = \
             deep_fm.fit(xi_train, xv_train, y_train, xi_test, xv_test, y_test, early_stopping=True, refit=False)
         metric_train_auc.append(train_auc)
