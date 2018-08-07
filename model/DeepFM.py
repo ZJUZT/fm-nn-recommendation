@@ -68,7 +68,7 @@ class DeepFM(torch.nn.Module):
     Attention: only support logistics regression
     """
 
-    def __init__(self, field_size, feature_sizes, embedding_size=10, is_shallow_dropout=True,
+    def __init__(self, field_size, feature_sizes, embedding_size=4, is_shallow_dropout=True,
                  dropout_shallow=[0.5, 0.5],
                  h_depth=2, deep_layers=[32, 32], is_deep_dropout=True, dropout_deep=[0.5, 0.5, 0.5],
                  deep_layers_activation='relu', n_epochs=20, batch_size=256, learning_rate=0.01,

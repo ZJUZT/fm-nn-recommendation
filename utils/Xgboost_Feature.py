@@ -12,9 +12,9 @@ from scipy.sparse import hstack, vstack
 class XgboostFeature():
     # 可以传入xgboost的参数
     # 常用传入特征的个数 即树的个数 默认30
-    def __init__(self, n_estimators=20,
+    def __init__(self, n_estimators=30,
                  learning_rate=0.1,
-                 max_depth=15,
+                 max_depth=7,
                  min_child_weight=1,
                  gamma=0.3,
                  subsample=0.8,
