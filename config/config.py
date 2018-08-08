@@ -82,7 +82,7 @@ xgb = {
     'max_depth': 31,
     'reg_lambda': 0.1,
     'min_child_weight': 50,
-    'n_estimators': 50,
+    'n_estimators': 20,
     'subsample': 0.8,
     'colsample_bytree': 0.8,
     'eta': 0.1,

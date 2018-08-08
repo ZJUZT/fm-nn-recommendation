@@ -25,6 +25,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.autograd import Variable
 
+from sklearn.cluster import KMeans
 import torch.backends.cudnn
 from utils import *
 
@@ -33,7 +34,7 @@ from utils import *
 """
 
 
-class DeepFM(torch.nn.Module):
+class LLDeepFM(torch.nn.Module):
     """
     :parameter
     -------------
@@ -68,7 +69,7 @@ class DeepFM(torch.nn.Module):
     Attention: only support logistics regression
     """
 
-    def __init__(self, field_size, feature_sizes, embedding_size=8, is_shallow_dropout=True,
+    def __init__(self, field_size, feature_sizes, embedding_size=8, anchor_num=50, nn_num=3, is_shallow_dropout=True,
                  dropout_shallow=[0.5, 0.5],
                  h_depth=2, deep_layers=[32, 32], is_deep_dropout=True, dropout_deep=[0.5, 0.5, 0.5],
                  deep_layers_activation='relu', n_epochs=8, batch_size=256, learning_rate=0.005,
@@ -76,7 +77,7 @@ class DeepFM(torch.nn.Module):
                  use_fm=True, use_ffm=False, use_deep=True, loss_type='logloss', eval_metric=roc_auc_score,
                  use_cuda=True, n_class=1, greater_is_better=True
                  ):
-        super(DeepFM, self).__init__()
+        super(LLDeepFM, self).__init__()
         self.field_size = field_size
         self.feature_sizes = feature_sizes
         self.embedding_size = embedding_size
@@ -103,6 +104,11 @@ class DeepFM(torch.nn.Module):
         self.use_cuda = use_cuda
         self.n_class = n_class
         self.greater_is_better = greater_is_better
+
+        self.anchor_num = anchor_num
+        self.nn_num = nn_num
+
+        self.anchor_points = None
 
         torch.manual_seed(self.random_seed)
 
@@ -361,8 +367,8 @@ class DeepFM(torch.nn.Module):
             total_sum = torch.sum(x_deep, 1)
         return total_sum
 
-    def fit(self, Xi_train, Xv_train, y_train, Xi_valid=None, Xv_valid=None,
-            y_valid=None, early_stopping=False, refit=False, save_path=None):
+    def fit(self, Xi_train, Xv_train, y_train, X_train, Xi_valid=None, Xv_valid=None,
+            y_valid=None, X_valid=None, early_stopping=False, refit=False, save_path=None):
         """
         :param Xi_train: [[ind1_1, ind1_2, ...], [ind2_1, ind2_2, ...], ..., [indi_1, indi_2, ..., indi_j, ...], ...]
                         indi_j is the list of feature index of feature field j of sample i in the training set
@@ -382,6 +388,11 @@ class DeepFM(torch.nn.Module):
         """
         pre_process
         """
+        logging.info('K-means to find {} anchor points'.format(self.anchor_num))
+        kmeans = KMeans(n_clusters=self.anchor_num, n_init=1, max_iter=10, random_state=0, verbose=1).fit(X_train)
+
+        self.anchor_points = kmeans.cluster_centers_
+
         if save_path and not os.path.exists('/'.join(save_path.split('/')[0:-1])):
             print("Save path is not existed!")
             return

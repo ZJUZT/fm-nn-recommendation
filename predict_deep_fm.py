@@ -25,15 +25,22 @@ if __name__ == '__main__':
         # xgb.fit_model(train_data_list[i] + '.libsvm', test_data_list[i] + '.libsvm')
 
         # logging.info('prepare data for XgBoost')
-        get_df_from_raw(train_data_list[i], test_data_list[i])
+        # get_df_from_raw(train_data_list[i], test_data_list[i])
 
         # XgBoost baseline
         # xgb_model = XGBModel()
         # x_train, y_train = load_svmlight_file(train_data_list[i]+'.libsvm')
         # x_test, y_test = load_svmlight_file(test_data_list[i]+'.libsvm')
         # res = xgb_model.fit(x_train, y_train, x_test, y_test)
-        # del x_train, y_train, x_test, y_test
         #
+        # # dump xgboost result
+        # y_pred = xgb_model.predict(x_test)
+        # logging.info('dump xgboost result')
+        # with open('xgboost_result', 'wb') as f:
+        #     pickle.dump(y_pred, f)
+        #
+        # del x_train, y_train, x_test, y_test
+
         # baseline_train = res['validation_0']['auc'][-1]
         # baseline_test = res['validation_1']['auc'][-1]
         #
@@ -52,11 +59,22 @@ if __name__ == '__main__':
         # metric_test_auc.append(valid_auc)
         # metric_test_log_loss.append(valid_loss)
 
+        # load baseline
+        # with open('xgboost_result', 'rb') as f:
+        #     y_pred_xgboost = pickle.load(f)
         # deep fm
         deep_fm = DeepFM.DeepFM(config['field_size'], config['feature_size'], verbose=True, use_cuda=False,
-                                weight_decay=0.0001, use_fm=False, use_ffm=True, use_deep=True)
+                                weight_decay=0.0001, use_fm=True, use_ffm=False, use_deep=True)
         train_auc, train_loss, valid_auc, valid_loss = \
             deep_fm.fit(xi_train, xv_train, y_train, xi_test, xv_test, y_test, early_stopping=True, refit=False)
+
+        logging.info('validating')
+        y_pred_deepfm = deep_fm.predict_proba(xi_test, xv_test)
+
+        # dump deep_fm result
+        with open('deepfm_result', 'wb') as f:
+            pickle.dump(y_pred_deepfm, f)
+
         metric_train_auc.append(train_auc)
         metric_train_log_loss.append(train_loss)
         metric_test_auc.append(valid_auc)
