@@ -24,6 +24,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.autograd import Variable
+from sklearn.metrics.pairwise import euclidean_distances
 
 from sklearn.cluster import KMeans
 import torch.backends.cudnn
@@ -150,11 +151,13 @@ class LLDeepFM(torch.nn.Module):
         if self.use_fm:
             print("Init fm part")
             self.fm_first_order_embeddings = nn.ModuleList(
-                [nn.Embedding(feature_size, 1) for feature_size in self.feature_sizes])
+                [nn.ModuleList([nn.Embedding(feature_size, 1) for feature_size in self.feature_sizes])
+                for _ in range(self.anchor_num)])
             if self.dropout_shallow:
                 self.fm_first_order_dropout = nn.Dropout(self.dropout_shallow[0])
-            self.fm_second_order_embeddings = nn.ModuleList(
+            self.fm_second_order_embeddings = nn.ModuleList([nn.ModuleList(
                 [nn.Embedding(feature_size, self.embedding_size) for feature_size in self.feature_sizes])
+                                                            for _ in range(self.anchor_num)])
             if self.dropout_shallow:
                 self.fm_second_order_dropout = nn.Dropout(self.dropout_shallow[1])
             print("Init fm part succeed")
@@ -203,7 +206,7 @@ class LLDeepFM(torch.nn.Module):
 
         print("Init succeed")
 
-    def forward(self, Xi, Xv):
+    def forward(self, Xi, Xv, X):
         """
         :param Xi_train: index input tensor, batch_size * k * 1
         :param Xv_train: value input tensor, batch_size * k * 1
@@ -220,18 +223,14 @@ class LLDeepFM(torch.nn.Module):
             fm_second_order_emb_arr = []
             fm_deep_embedding = []
             for i in range(len(Xi)):
-                # first_emb_list = [torch.mm(
-                #     torch.FloatTensor(Xv[i][j]).view(-1, 1).t(), emb(torch.LongTensor(Xi[i][j])))
-                #     if len(Xi[i][j]) > 0 else torch.FloatTensor([[0.0]])
-                #     for j, emb in enumerate(self.fm_first_order_embeddings)
-                #     ]
-                # fm_first_order_emb_arr.append(torch.sum(torch.cat(first_emb_list)))
+                # calculate distance
+                self.nearest_neighbour(X[i])
 
                 second_emb_list = [torch.mm(
                     torch.FloatTensor(Xv[i][j]).view(-1, 1).t(), emb(torch.LongTensor(Xi[i][j]))
                 ) if len(Xi[i][j]) > 0 else torch.zeros([1, self.embedding_size])
-                    for j, emb in enumerate(self.fm_second_order_embeddings)
-                ]
+                                   for j, emb in enumerate(self.fm_second_order_embeddings)
+                                   ]
 
                 fm_deep_embedding.append(torch.cat(second_emb_list, 1))
                 tmp = torch.cat(second_emb_list, 0)
@@ -255,69 +254,12 @@ class LLDeepFM(torch.nn.Module):
                 fm_second_order = self.fm_second_order_dropout(fm_second_order)
 
         """
-            ffm part
-        """
-        if self.use_ffm:
-            ffm_first_order_emb_arr = []
-            ffm_second_order = []
-            ffm_deep_embedding = []
-            for i in range(len(Xi)):
-                # first order
-                first_emb_list = [torch.mm(
-                    torch.FloatTensor(Xv[i][j]).view(-1, 1).t(), emb(torch.LongTensor(Xi[i][j])))
-                    if len(Xi[i][j]) > 0 else torch.FloatTensor([[0.0]])
-                    for j, emb in enumerate(self.ffm_first_order_embeddings)
-                    ]
-                ffm_first_order_emb_arr.append(torch.sum(torch.cat(first_emb_list)))
-
-                # second order
-                ffm_second_order_emb_arr = [[torch.mm(
-                    torch.FloatTensor(Xv[i][j]).view(-1, 1).t(), emb(torch.LongTensor(Xi[i][j]))
-                ) if len(Xi[i][j]) > 0 else torch.zeros([1, self.embedding_size]) for emb in f_embs]
-                    for j, f_embs in enumerate(self.ffm_second_order_embeddings)
-                ]
-
-                deep_input = ([sum(ffm_second_order_embs)
-                                           for ffm_second_order_embs in ffm_second_order_emb_arr])
-
-                ffm_deep_embedding.append(torch.cat(deep_input, 1))
-
-                ffm_wij_arr = []
-                for i in range(self.field_size):
-                    for j in range(i + 1, self.field_size):
-                        ffm_wij_arr.append(ffm_second_order_emb_arr[i][j] * ffm_second_order_emb_arr[j][i])
-                ffm_second_order.append(sum(ffm_wij_arr))
-
-            ffm_first_order = torch.FloatTensor(ffm_first_order_emb_arr).view(-1, 1)
-            ffm_second_order = torch.cat(ffm_second_order)
-            ffm_deep_embedding = torch.cat(ffm_deep_embedding)
-
-            """
-            ffm_first_order_emb_arr = [(torch.sum(emb(Xi[:, i, :]), 1).t() * Xv[:, i]).t() for i, emb in
-                                       enumerate(self.ffm_first_order_embeddings)]
-            ffm_first_order = torch.cat(ffm_first_order_emb_arr, 1)
-            if self.is_shallow_dropout:
-                ffm_first_order = self.ffm_first_order_dropout(ffm_first_order)
-            ffm_second_order_emb_arr = [[(torch.sum(emb(Xi[:, i, :]), 1).t() * Xv[:, i]).t() for emb in f_embs] for
-                                        i, f_embs in enumerate(self.ffm_second_order_embeddings)]
-            ffm_wij_arr = []
-            for i in range(self.field_size):
-                for j in range(i + 1, self.field_size):
-                    ffm_wij_arr.append(ffm_second_order_emb_arr[i][j] * ffm_second_order_emb_arr[j][i])
-            ffm_second_order = sum(ffm_wij_arr)
-            if self.is_shallow_dropout:
-                ffm_second_order = self.ffm_second_order_dropout(ffm_second_order)
-            """
-
-        """
             deep part
         """
         if self.use_deep:
             if self.use_fm:
                 # deep_emb = torch.cat(fm_second_order_emb_arr, 1)
                 deep_emb = fm_deep_embedding
-            elif self.use_ffm:
-                deep_emb = ffm_deep_embedding
             else:
                 # deep_emb = torch.cat([(torch.sum(emb(Xi[:, i, :]), 1).t() * Xv[:, i]).t() for i, emb in
                 #                       enumerate(self.fm_second_order_embeddings)], 1)
@@ -355,20 +297,26 @@ class LLDeepFM(torch.nn.Module):
         if self.use_fm and self.use_deep:
             # total_sum = torch.sum(fm_first_order, 1) + torch.sum(fm_second_order, 1) + torch.sum(x_deep, 1) + self.bias
             total_sum = torch.sum(fm_second_order, 1) + torch.sum(x_deep, 1) + self.bias
-        elif self.use_ffm and self.use_deep:
-            total_sum = torch.sum(ffm_first_order, 1) + torch.sum(ffm_second_order, 1) + torch.sum(x_deep,
-                                                                                                   1) + self.bias
+        # elif self.use_ffm and self.use_deep:
+        #     total_sum = torch.sum(ffm_first_order, 1) + torch.sum(ffm_second_order, 1) + torch.sum(x_deep,
+        #                                                                                            1) + self.bias
         elif self.use_fm:
             # total_sum = torch.sum(fm_first_order, 1) + torch.sum(fm_second_order, 1) + self.bias
             total_sum = torch.sum(fm_second_order, 1) + self.bias
-        elif self.use_ffm:
-            total_sum = torch.sum(ffm_first_order, 1) + torch.sum(ffm_second_order, 1) + self.bias
+        # elif self.use_ffm:
+        #     total_sum = torch.sum(ffm_first_order, 1) + torch.sum(ffm_second_order, 1) + self.bias
         else:
             total_sum = torch.sum(x_deep, 1)
         return total_sum
 
+    def nearest_neighbour(self, x):
+        dis = euclidean_distances(x, self.anchor_points)
+        idx = np.argsort(dis)[0][:self.nn_num]
+        return idx, dis[0][idx]
+
+
     def fit(self, Xi_train, Xv_train, y_train, X_train, Xi_valid=None, Xv_valid=None,
-            y_valid=None, X_valid=None, early_stopping=False, refit=False, save_path=None):
+            y_valid=None, X_valid=None, adaptive_anchor=False, early_stopping=False, refit=False, save_path=None):
         """
         :param Xi_train: [[ind1_1, ind1_2, ...], [ind2_1, ind2_2, ...], ..., [indi_1, indi_2, ..., indi_j, ...], ...]
                         indi_j is the list of feature index of feature field j of sample i in the training set
@@ -389,9 +337,10 @@ class LLDeepFM(torch.nn.Module):
         pre_process
         """
         logging.info('K-means to find {} anchor points'.format(self.anchor_num))
-        kmeans = KMeans(n_clusters=self.anchor_num, n_init=1, max_iter=10, random_state=0, verbose=1).fit(X_train)
+        kmeans = KMeans(n_clusters=self.anchor_num, n_init=1, max_iter=2, random_state=0, verbose=1).fit(X_train)
 
-        self.anchor_points = kmeans.cluster_centers_
+        self.anchor_points = Variable(torch.from_numpy(kmeans.cluster_centers_), requires_grad=adaptive_anchor)
+        logging.info('K-means done')
 
         if save_path and not os.path.exists('/'.join(save_path.split('/')[0:-1])):
             print("Save path is not existed!")
@@ -403,12 +352,14 @@ class LLDeepFM(torch.nn.Module):
         # Xi_train = np.array(Xi_train).reshape((-1, self.field_size, 1))
         Xi_train = np.array(Xi_train)
         Xv_train = np.array(Xv_train)
+        # X_train = np.array(X_train)
         y_train = np.array(y_train)
         x_size = Xi_train.shape[0]
         if Xi_valid:
             # Xi_valid = np.array(Xi_valid).reshape((-1, self.field_size, 1))
             Xi_valid = np.array(Xi_valid)
             Xv_valid = np.array(Xv_valid)
+            # X_valid = np.array(X_train)
             y_valid = np.array(y_valid)
             x_valid_size = Xi_valid.shape[0]
             is_valid = True
@@ -451,12 +402,13 @@ class LLDeepFM(torch.nn.Module):
 
                 batch_xi = Xi_train[offset: end]
                 batch_xv = Xv_train[offset: end]
+                batch_x = X_train[offset:end]
 
                 batch_y = Variable(torch.FloatTensor(y_train[offset:end]))
                 if self.use_cuda:
                     batch_xi, batch_xv, batch_y = batch_xi.cuda(), batch_xv.cuda(), batch_y.cuda()
                 optimizer.zero_grad()
-                outputs = model(batch_xi, batch_xv)
+                outputs = model(batch_xi, batch_xv, batch_x)
                 loss = criterion(outputs, batch_y)
                 loss.backward()
                 optimizer.step()
@@ -470,7 +422,7 @@ class LLDeepFM(torch.nn.Module):
                         total_loss = 0.0
                         batch_begin_time = time()
 
-            train_loss, train_eval = self.eval_by_batch(Xi_train, Xv_train, y_train, x_size)
+            train_loss, train_eval = self.eval_by_batch(Xi_train, Xv_train, X_train, y_train, x_size)
             train_result.append(train_eval)
             train_loss_record.append(train_loss)
             print('*' * 50)
@@ -479,7 +431,7 @@ class LLDeepFM(torch.nn.Module):
             print('*' * 50)
 
             if is_valid:
-                valid_loss, valid_eval = self.eval_by_batch(Xi_valid, Xv_valid, y_valid, x_valid_size)
+                valid_loss, valid_eval = self.eval_by_batch(Xi_valid, Xv_valid, X_valid, y_valid, x_valid_size)
                 valid_result.append(valid_eval)
                 valid_loss_record.append(valid_loss)
                 print('*' * 50)
@@ -534,7 +486,7 @@ class LLDeepFM(torch.nn.Module):
                 print("refit finished")
         return train_result, train_loss_record, valid_result, valid_loss_record
 
-    def eval_by_batch(self, Xi, Xv, y, x_size):
+    def eval_by_batch(self, Xi, Xv, X, y, x_size):
         total_loss = 0.0
         y_pred = []
         if self.use_ffm:
@@ -553,10 +505,11 @@ class LLDeepFM(torch.nn.Module):
             # batch_xv = Variable(torch.FloatTensor(Xv[offset:end]))
             batch_xi = Xi[offset:end]
             batch_xv = Xv[offset:end]
+            batch_x = X[offset:end]
             batch_y = Variable(torch.FloatTensor(y[offset:end]))
             if self.use_cuda:
                 batch_xi, batch_xv, batch_y = batch_xi.cuda(), batch_xv.cuda(), batch_y.cuda()
-            outputs = model(batch_xi, batch_xv)
+            outputs = model(batch_xi, batch_xv, batch_x)
             pred = F.sigmoid(outputs).cpu()
             y_pred.extend(pred.data.numpy())
             loss = criterion(outputs, batch_y)

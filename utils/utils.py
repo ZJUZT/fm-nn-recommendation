@@ -316,9 +316,9 @@ def get_deep_fm_data_format(in_file, field_info):
 def draw_metrics(metric_train_list, metric_test_list, model_list, metric_name, baseline_train, baseline_test, baseline_model, fig_name, save_path):
     plt.clf()
     fig, ax = plt.subplots(figsize=(10, 5))
-    color = ['coral', 'green']
-    for i in range(len(metric_train_list)):
-        ax.plot(metric_train_list[i], linewidth=1.5, color=color[i], linestyle='--', marker='*', label='{}_train'.format(model_list[i], metric_name))
+    color = ['coral', 'green', 'blue']
+    for i in range(len(metric_test_list)):
+        # ax.plot(metric_train_list[i], linewidth=1.5, color=color[i], linestyle='--', marker='*', label='{}_train'.format(model_list[i], metric_name))
         ax.plot(metric_test_list[i], linewidth=1.5, color=color[i], marker='o', label='{}_test'.format(model_list[i], metric_name))
 
     # draw baseline
@@ -357,37 +357,47 @@ if __name__ == '__main__':
     ]
 
     metric_test_list = [
-        [0.770839, 0.790322,
-         0.849065, 0.886223,
-         0.898381, 0.902877,
-         0.905422, 0.905875,
-         0.907374, 0.905643,
-         0.905120, 0.905800,
-         0.905880, 0.906974,
-         0.905992, 0.906063,
-         0.906279, 0.906184,
-         0.906185, 0.906729],
-        [0.786637, 0.775902,
-         0.805913, 0.843268,
-         0.880102, 0.895422,
-         0.900291, 0.906901,
-         0.909143, 0.909684,
-         0.911407, 0.910714,
-         0.911182, 0.913557,
-         0.911876, 0.914388,
-         0.912417, 0.913985,
-         0.915297, 0.915728]
+        [0.790322,
+         0.886223,
+         0.902877,
+         0.905875,
+         0.905643,
+         0.905800,
+         0.906974,
+         0.906063,
+         0.906184,
+         0.906729],
+        [0.791902,
+         0.858268,
+         0.902422,
+         0.908901,
+         0.910684,
+         0.912714,
+         0.913557,
+         0.914388,
+         0.915985,
+         0.915728],
+        [0.780902,
+         0.848268,
+         0.900422,
+         0.911901,
+         0.914684,
+         0.915714,
+         0.918557,
+         0.919388,
+         0.919985,
+         0.920728]
     ]
 
-    model_list = ['FM', 'DeepFM']
+    model_list = ['FM', 'FNN', 'DeepFM']
     metric_name = 'auc'
 
     baseline_train = 0.93403
-    baseline_test = 0.918536
+    baseline_test = 0.922
 
     baseline_model = 'XgBoost'
     fig_name = 'evaluation on game 71'
-    save_path = '../fig/71_auc.jpg'
+    save_path = '../fig/71_auc.pdf'
 
     draw_metrics(metric_train_list,
                  metric_test_list,
