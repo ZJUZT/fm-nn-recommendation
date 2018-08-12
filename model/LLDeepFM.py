@@ -13,16 +13,12 @@ Reference:
 """
 
 import os
-import numpy as np
-from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.metrics import roc_auc_score
 from time import time
 
 import torch
-import torch.autograd as autograd
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.optim as optim
 from torch.autograd import Variable
 from sklearn.metrics.pairwise import euclidean_distances
 
@@ -70,7 +66,7 @@ class LLDeepFM(torch.nn.Module):
     Attention: only support logistics regression
     """
 
-    def __init__(self, field_size, feature_sizes, embedding_size=8, anchor_num=50, nn_num=3, is_shallow_dropout=True,
+    def __init__(self, field_size, feature_sizes, embedding_size=8, anchor_num=50, nn_num=3, c=1, is_shallow_dropout=True,
                  dropout_shallow=[0.5, 0.5],
                  h_depth=2, deep_layers=[32, 32], is_deep_dropout=True, dropout_deep=[0.5, 0.5, 0.5],
                  deep_layers_activation='relu', n_epochs=8, batch_size=256, learning_rate=0.005,
@@ -108,6 +104,7 @@ class LLDeepFM(torch.nn.Module):
 
         self.anchor_num = anchor_num
         self.nn_num = nn_num
+        self.c = 1.0
 
         self.anchor_points = None
 
@@ -215,105 +212,103 @@ class LLDeepFM(torch.nn.Module):
         """
             fm part
         """
+
+        # local coding
+        res = []
+
         if self.use_fm:
 
-            # fm_first_order_emb_arr = []
-            fm_sum_second_order_emb_square = []
-            fm_second_order_emb_square_sum = []
-            fm_second_order_emb_arr = []
-            fm_deep_embedding = []
             for i in range(len(Xi)):
                 # calculate distance
-                self.nearest_neighbour(X[i])
+                nn_idx, nn_weight = self.nearest_neighbour(X[i])
 
-                second_emb_list = [torch.mm(
-                    torch.FloatTensor(Xv[i][j]).view(-1, 1).t(), emb(torch.LongTensor(Xi[i][j]))
-                ) if len(Xi[i][j]) > 0 else torch.zeros([1, self.embedding_size])
-                                   for j, emb in enumerate(self.fm_second_order_embeddings)
-                                   ]
+                ll_res = []
+                for k in range(len(nn_idx)):
+                    """
+                        fm part with second order
+                    """
+                    fm_second_order_embeddings = self.fm_second_order_embeddings[nn_idx[k]]
 
-                fm_deep_embedding.append(torch.cat(second_emb_list, 1))
-                tmp = torch.cat(second_emb_list, 0)
-                square_sum = torch.sum(tmp, 0)
-                fm_second_order_emb_arr.append(square_sum.clone())
-                square_sum = square_sum * square_sum
-                fm_sum_second_order_emb_square.append(square_sum)
+                    second_emb_list = [torch.mm(
+                        torch.FloatTensor(Xv[i][j]).view(-1, 1).t(), emb(torch.LongTensor(Xi[i][j]))
+                    ) if len(Xi[i][j]) > 0 else torch.zeros([1, self.embedding_size])
+                                       for j, emb in enumerate(fm_second_order_embeddings)
+                                       ]
 
-                sum_square = torch.sum(tmp * tmp, 0)
-                fm_second_order_emb_square_sum.append(sum_square)
+                    # fm_deep_embedding.append(torch.cat(second_emb_list, 1))
+                    fm_deep_embedding = torch.cat(second_emb_list, 1)
+                    tmp = torch.cat(second_emb_list, 0)
+                    square_sum = torch.sum(tmp, 0)
+                    # fm_second_order_emb_arr.append(square_sum.clone())
+                    # fm_second_order_emb_arr = square_sum
+                    square_sum = square_sum * square_sum
+                    # fm_sum_second_order_emb_square.append(square_sum)
+                    fm_sum_second_order_emb_square = square_sum
 
-            # fm_first_order = torch.FloatTensor(fm_first_order_emb_arr).view(-1, 1)
-            # if self.is_shallow_dropout:
-            #     fm_first_order = self.fm_first_order_dropout(fm_first_order)
 
-            fm_deep_embedding = torch.cat(fm_deep_embedding)
-            fm_sum_second_order_emb_square = torch.stack(fm_sum_second_order_emb_square)
-            fm_second_order_emb_square_sum = torch.stack(fm_second_order_emb_square_sum)
-            fm_second_order = (fm_sum_second_order_emb_square - fm_second_order_emb_square_sum) * 0.5
-            if self.is_shallow_dropout:
-                fm_second_order = self.fm_second_order_dropout(fm_second_order)
+                    sum_square = torch.sum(tmp * tmp, 0)
+                    # fm_second_order_emb_square_sum.append(sum_square)
+                    fm_second_order_emb_square_sum = square_sum
+                    fm_second_order = (fm_sum_second_order_emb_square - fm_second_order_emb_square_sum) * 0.5
+                    if self.is_shallow_dropout:
+                        fm_second_order = self.fm_second_order_dropout(fm_second_order)
 
-        """
-            deep part
-        """
-        if self.use_deep:
-            if self.use_fm:
-                # deep_emb = torch.cat(fm_second_order_emb_arr, 1)
-                deep_emb = fm_deep_embedding
-            else:
-                # deep_emb = torch.cat([(torch.sum(emb(Xi[:, i, :]), 1).t() * Xv[:, i]).t() for i, emb in
-                #                       enumerate(self.fm_second_order_embeddings)], 1)
-                emb = self.fm_second_order_embeddings[0]
-                deep_emb = []
-                for i in range(len(Xi)):
-                    deep_emb.append(
-                        torch.mm(emb(torch.LongTensor(Xi[i])).t(), torch.FloatTensor(Xv[i]).view(-1, 1)).t())
-                deep_emb = torch.cat(deep_emb, 0)
+                    """
+                        deep part
+                    """
+                    if self.use_deep:
+                        deep_emb = fm_deep_embedding
+                        if self.deep_layers_activation == 'sigmoid':
+                            activation = F.sigmoid
+                        elif self.deep_layers_activation == 'tanh':
+                            activation = F.tanh
+                        else:
+                            activation = F.relu
+                        if self.is_deep_dropout:
+                            deep_emb = self.linear_0_dropout(deep_emb)
+                        x_deep = self.linear_1(deep_emb)
+                        if self.is_batch_norm:
+                            x_deep = self.batch_norm_1(x_deep)
+                        x_deep = activation(x_deep)
+                        if self.is_deep_dropout:
+                            x_deep = self.linear_1_dropout(x_deep)
+                        for i in range(1, len(self.deep_layers)):
+                            x_deep = getattr(self, 'linear_' + str(i + 1))(x_deep)
+                            if self.is_batch_norm:
+                                x_deep = getattr(self, 'batch_norm_' + str(i + 1))(x_deep)
+                            x_deep = activation(x_deep)
+                            if self.is_deep_dropout:
+                                x_deep = getattr(self, 'linear_' + str(i + 1) + '_dropout')(x_deep)
 
-            if self.deep_layers_activation == 'sigmoid':
-                activation = F.sigmoid
-            elif self.deep_layers_activation == 'tanh':
-                activation = F.tanh
-            else:
-                activation = F.relu
-            if self.is_deep_dropout:
-                deep_emb = self.linear_0_dropout(deep_emb)
-            x_deep = self.linear_1(deep_emb)
-            if self.is_batch_norm:
-                x_deep = self.batch_norm_1(x_deep)
-            x_deep = activation(x_deep)
-            if self.is_deep_dropout:
-                x_deep = self.linear_1_dropout(x_deep)
-            for i in range(1, len(self.deep_layers)):
-                x_deep = getattr(self, 'linear_' + str(i + 1))(x_deep)
-                if self.is_batch_norm:
-                    x_deep = getattr(self, 'batch_norm_' + str(i + 1))(x_deep)
-                x_deep = activation(x_deep)
-                if self.is_deep_dropout:
-                    x_deep = getattr(self, 'linear_' + str(i + 1) + '_dropout')(x_deep)
-        """
-            sum
-        """
-        if self.use_fm and self.use_deep:
-            # total_sum = torch.sum(fm_first_order, 1) + torch.sum(fm_second_order, 1) + torch.sum(x_deep, 1) + self.bias
-            total_sum = torch.sum(fm_second_order, 1) + torch.sum(x_deep, 1) + self.bias
-        # elif self.use_ffm and self.use_deep:
-        #     total_sum = torch.sum(ffm_first_order, 1) + torch.sum(ffm_second_order, 1) + torch.sum(x_deep,
-        #                                                                                            1) + self.bias
-        elif self.use_fm:
-            # total_sum = torch.sum(fm_first_order, 1) + torch.sum(fm_second_order, 1) + self.bias
-            total_sum = torch.sum(fm_second_order, 1) + self.bias
-        # elif self.use_ffm:
-        #     total_sum = torch.sum(ffm_first_order, 1) + torch.sum(ffm_second_order, 1) + self.bias
-        else:
-            total_sum = torch.sum(x_deep, 1)
-        return total_sum
+                    """
+                        sum
+                    """
+                    if self.use_fm and self.use_deep:
+                        # total_sum = torch.sum(fm_second_order, 1) + torch.sum(x_deep, 1) + self.bias
+                        total_sum = torch.sum(fm_second_order) + torch.sum(x_deep) + self.bias
+                    elif self.use_fm:
+                        # total_sum = torch.sum(fm_second_order, 1) + self.bias
+                        total_sum = torch.sum(fm_second_order) + self.bias
+                    else:
+                        total_sum = torch.sum(x_deep, 1)
+
+                    ll_res.append(total_sum)
+                res.append(torch.sum(torch.FloatTensor(ll_res) * torch.FloatTensor(nn_weight)))
+
+        return torch.stack(res)
 
     def nearest_neighbour(self, x):
-        dis = euclidean_distances(x, self.anchor_points)
-        idx = np.argsort(dis)[0][:self.nn_num]
-        return idx, dis[0][idx]
-
+        # dis = euclidean_distances(x, self.anchor_points)
+        x = torch.FloatTensor(x.todense())
+        dis = torch.sum((self.anchor_points-x)**2, 1)
+        # idx = np.argsort(dis)[0][:self.nn_num]
+        sorted_dis, indice = torch.sort(dis)
+        weight = sorted_dis[:self.nn_num]
+        idx = indice[:self.nn_num]
+        # weight = dis[0][idx]
+        dis_scaled = torch.exp(-weight)
+        weight = dis_scaled/torch.sum(dis_scaled)
+        return idx, weight
 
     def fit(self, Xi_train, Xv_train, y_train, X_train, Xi_valid=None, Xv_valid=None,
             y_valid=None, X_valid=None, adaptive_anchor=False, early_stopping=False, refit=False, save_path=None):
@@ -337,9 +332,9 @@ class LLDeepFM(torch.nn.Module):
         pre_process
         """
         logging.info('K-means to find {} anchor points'.format(self.anchor_num))
-        kmeans = KMeans(n_clusters=self.anchor_num, n_init=1, max_iter=2, random_state=0, verbose=1).fit(X_train)
+        kmeans = KMeans(n_clusters=self.anchor_num, n_init=1, max_iter=2, random_state=2018, verbose=1).fit(X_train)
 
-        self.anchor_points = Variable(torch.from_numpy(kmeans.cluster_centers_), requires_grad=adaptive_anchor)
+        self.anchor_points = Variable(torch.from_numpy(kmeans.cluster_centers_).float(), requires_grad=adaptive_anchor)
         logging.info('K-means done')
 
         if save_path and not os.path.exists('/'.join(save_path.split('/')[0:-1])):
@@ -416,7 +411,7 @@ class LLDeepFM(torch.nn.Module):
                 total_loss += loss.data.item()
                 if self.verbose:
                     if i % 100 == 99:  # print every 100 mini-batches
-                        eval = self.evaluate(batch_xi, batch_xv, batch_y)
+                        eval = self.evaluate(batch_xi, batch_xv, batch_x, batch_y)
                         print('[%d, %5d] loss: %.6f metric: %.6f time: %.1f s' %
                               (epoch + 1, i + 1, total_loss / 100.0, eval, time() - batch_begin_time))
                         total_loss = 0.0
@@ -444,46 +439,6 @@ class LLDeepFM(torch.nn.Module):
                 print("early stop at [%d] epoch!" % (epoch + 1))
                 break
 
-        # fit a few more epoch on train+valid until result reaches the best_train_score
-        if is_valid and refit:
-            if self.verbose:
-                print("refitting the model")
-            if self.greater_is_better:
-                best_epoch = np.argmax(valid_result)
-            else:
-                best_epoch = np.argmin(valid_result)
-            best_train_score = train_result[best_epoch]
-            Xi_train = np.concatenate((Xi_train, Xi_valid))
-            Xv_train = np.concatenate((Xv_train, Xv_valid))
-            y_train = np.concatenate((y_train, y_valid))
-            x_size = x_size + x_valid_size
-            self.shuffle_in_unison_scary(Xi_train, Xv_train, y_train)
-            for epoch in range(64):
-                batch_iter = x_size // self.batch_size
-                for i in range(batch_iter + 1):
-                    offset = i * self.batch_size
-                    end = min(x_size, offset + self.batch_size)
-                    if offset == end:
-                        break
-                    batch_xi = Variable(torch.LongTensor(Xi_train[offset:end]))
-                    batch_xv = Variable(torch.FloatTensor(Xv_train[offset:end]))
-                    batch_y = Variable(torch.FloatTensor(y_train[offset:end]))
-                    if self.use_cuda:
-                        batch_xi, batch_xv, batch_y = batch_xi.cuda(), batch_xv.cuda(), batch_y.cuda()
-                    optimizer.zero_grad()
-                    outputs = model(batch_xi, batch_xv)
-                    loss = criterion(outputs, batch_y)
-                    loss.backward()
-                    optimizer.step()
-                train_loss, train_eval = self.eval_by_batch(Xi_train, Xv_train, y_train, x_size)
-                if save_path:
-                    torch.save(self.state_dict(), save_path)
-                if abs(best_train_score - train_eval) < 0.001 or \
-                        (self.greater_is_better and train_eval > best_train_score) or \
-                        ((not self.greater_is_better) and train_result < best_train_score):
-                    break
-            if self.verbose:
-                print("refit finished")
         return train_result, train_loss_record, valid_result, valid_loss_record
 
     def eval_by_batch(self, Xi, Xv, X, y, x_size):
@@ -556,7 +511,7 @@ class LLDeepFM(torch.nn.Module):
         pred = F.sigmoid(model(Xi, Xv)).cpu()
         return (pred.data.numpy() > 0.5)
 
-    def predict_proba(self, Xi, Xv):
+    def predict_proba(self, Xi, Xv, X):
         # Xi = np.array(Xi).reshape((-1, self.field_size, 1))
         # Xi = Variable(torch.LongTensor(Xi))
         # Xv = Variable(torch.FloatTensor(Xv))
@@ -564,7 +519,7 @@ class LLDeepFM(torch.nn.Module):
         #     Xi, Xv = Xi.cuda(), Xv.cuda()
 
         model = self.eval()
-        pred = F.sigmoid(model(Xi, Xv)).cpu()
+        pred = F.sigmoid(model(Xi, Xv, X)).cpu()
         return pred.data.numpy().tolist()
 
     def inner_predict(self, Xi, Xv):
@@ -577,22 +532,22 @@ class LLDeepFM(torch.nn.Module):
         pred = F.sigmoid(model(Xi, Xv)).cpu()
         return (pred.data.numpy() > 0.5)
 
-    def inner_predict_proba(self, Xi, Xv):
+    def inner_predict_proba(self, Xi, Xv, X):
         """
         :param Xi: tensor of feature index
         :param Xv: tensor of feature value
         :return: output, numpy
         """
         model = self.eval()
-        pred = F.sigmoid(model(Xi, Xv)).cpu()
+        pred = F.sigmoid(model(Xi, Xv, X)).cpu()
         return pred.data.numpy()
 
-    def evaluate(self, Xi, Xv, y):
+    def evaluate(self, Xi, Xv, X, y):
         """
         :param Xi: tensor of feature index
         :param Xv: tensor of feature value
         :param y: tensor of labels
         :return: metric of the evaluation
         """
-        y_pred = self.inner_predict_proba(Xi, Xv)
+        y_pred = self.inner_predict_proba(Xi, Xv, X)
         return self.eval_metric(y.cpu().data.numpy(), y_pred)
