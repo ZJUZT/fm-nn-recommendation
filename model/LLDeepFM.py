@@ -66,7 +66,8 @@ class LLDeepFM(torch.nn.Module):
     Attention: only support logistics regression
     """
 
-    def __init__(self, field_size, feature_sizes, embedding_size=8, anchor_num=50, nn_num=3, c=1, is_shallow_dropout=True,
+    def __init__(self, field_size, feature_sizes, embedding_size=4, anchor_num=20, nn_num=3, c=0.01,
+                 is_shallow_dropout=True,
                  dropout_shallow=[0.5, 0.5],
                  h_depth=2, deep_layers=[32, 32], is_deep_dropout=True, dropout_deep=[0.5, 0.5, 0.5],
                  deep_layers_activation='relu', n_epochs=8, batch_size=256, learning_rate=0.005,
@@ -104,7 +105,7 @@ class LLDeepFM(torch.nn.Module):
 
         self.anchor_num = anchor_num
         self.nn_num = nn_num
-        self.c = 1.0
+        self.c = c
 
         self.anchor_points = None
 
@@ -149,12 +150,12 @@ class LLDeepFM(torch.nn.Module):
             print("Init fm part")
             self.fm_first_order_embeddings = nn.ModuleList(
                 [nn.ModuleList([nn.Embedding(feature_size, 1) for feature_size in self.feature_sizes])
-                for _ in range(self.anchor_num)])
+                 for _ in range(self.anchor_num)])
             if self.dropout_shallow:
                 self.fm_first_order_dropout = nn.Dropout(self.dropout_shallow[0])
             self.fm_second_order_embeddings = nn.ModuleList([nn.ModuleList(
                 [nn.Embedding(feature_size, self.embedding_size) for feature_size in self.feature_sizes])
-                                                            for _ in range(self.anchor_num)])
+                 for _ in range(self.anchor_num)])
             if self.dropout_shallow:
                 self.fm_second_order_dropout = nn.Dropout(self.dropout_shallow[1])
             print("Init fm part succeed")
@@ -235,20 +236,14 @@ class LLDeepFM(torch.nn.Module):
                                        for j, emb in enumerate(fm_second_order_embeddings)
                                        ]
 
-                    # fm_deep_embedding.append(torch.cat(second_emb_list, 1))
                     fm_deep_embedding = torch.cat(second_emb_list, 1)
                     tmp = torch.cat(second_emb_list, 0)
                     square_sum = torch.sum(tmp, 0)
-                    # fm_second_order_emb_arr.append(square_sum.clone())
-                    # fm_second_order_emb_arr = square_sum
                     square_sum = square_sum * square_sum
-                    # fm_sum_second_order_emb_square.append(square_sum)
                     fm_sum_second_order_emb_square = square_sum
 
-
                     sum_square = torch.sum(tmp * tmp, 0)
-                    # fm_second_order_emb_square_sum.append(sum_square)
-                    fm_second_order_emb_square_sum = square_sum
+                    fm_second_order_emb_square_sum = sum_square
                     fm_second_order = (fm_sum_second_order_emb_square - fm_second_order_emb_square_sum) * 0.5
                     if self.is_shallow_dropout:
                         fm_second_order = self.fm_second_order_dropout(fm_second_order)
@@ -293,22 +288,23 @@ class LLDeepFM(torch.nn.Module):
                         total_sum = torch.sum(x_deep, 1)
 
                     ll_res.append(total_sum)
-                res.append(torch.sum(torch.FloatTensor(ll_res) * torch.FloatTensor(nn_weight)))
+                res.append(torch.sum(torch.cat(ll_res) * nn_weight))
 
         return torch.stack(res)
 
     def nearest_neighbour(self, x):
         # dis = euclidean_distances(x, self.anchor_points)
         x = torch.FloatTensor(x.todense())
-        dis = torch.sum((self.anchor_points-x)**2, 1)
+        dis = torch.sum((self.anchor_points - x) ** 2, 1)
         # idx = np.argsort(dis)[0][:self.nn_num]
         sorted_dis, indice = torch.sort(dis)
         weight = sorted_dis[:self.nn_num]
         idx = indice[:self.nn_num]
         # weight = dis[0][idx]
-        dis_scaled = torch.exp(-weight)
-        weight = dis_scaled/torch.sum(dis_scaled)
+        dis_scaled = torch.exp(-self.c * weight)
+        weight = dis_scaled / torch.sum(dis_scaled)
         return idx, weight
+        # return torch.LongTensor([0]), torch.FloatTensor([1.0])
 
     def fit(self, Xi_train, Xv_train, y_train, X_train, Xi_valid=None, Xv_valid=None,
             y_valid=None, X_valid=None, adaptive_anchor=False, early_stopping=False, refit=False, save_path=None):
@@ -332,7 +328,7 @@ class LLDeepFM(torch.nn.Module):
         pre_process
         """
         logging.info('K-means to find {} anchor points'.format(self.anchor_num))
-        kmeans = KMeans(n_clusters=self.anchor_num, n_init=1, max_iter=2, random_state=2018, verbose=1).fit(X_train)
+        kmeans = KMeans(n_clusters=self.anchor_num, n_init=1, max_iter=5, random_state=2018, verbose=1).fit(X_train)
 
         self.anchor_points = Variable(torch.from_numpy(kmeans.cluster_centers_).float(), requires_grad=adaptive_anchor)
         logging.info('K-means done')
