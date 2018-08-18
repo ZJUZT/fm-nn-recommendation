@@ -68,9 +68,9 @@ class LLDeepFM(torch.nn.Module):
 
     def __init__(self, field_size, feature_sizes, embedding_size=4, anchor_num=20, nn_num=3, c=0.01,
                  is_shallow_dropout=True,
-                 dropout_shallow=[0.5, 0.5],
-                 h_depth=2, deep_layers=[32, 32], is_deep_dropout=True, dropout_deep=[0.5, 0.5, 0.5],
-                 deep_layers_activation='relu', n_epochs=8, batch_size=256, learning_rate=0.005,
+                 dropout_shallow=[0.0, 0.0],
+                 h_depth=2, deep_layers=[32, 32], is_deep_dropout=True, dropout_deep=[0.0, 0.0, 0.0],
+                 deep_layers_activation='relu', n_epochs=8, batch_size=256, learning_rate=0.01,
                  optimizer_type='adam', is_batch_norm=False, verbose=False, random_seed=950104, weight_decay=0.0,
                  use_fm=True, use_ffm=False, use_deep=True, loss_type='logloss', eval_metric=roc_auc_score,
                  use_cuda=True, n_class=1, greater_is_better=True
@@ -148,11 +148,11 @@ class LLDeepFM(torch.nn.Module):
         """
         if self.use_fm:
             print("Init fm part")
-            self.fm_first_order_embeddings = nn.ModuleList(
-                [nn.ModuleList([nn.Embedding(feature_size, 1) for feature_size in self.feature_sizes])
-                 for _ in range(self.anchor_num)])
-            if self.dropout_shallow:
-                self.fm_first_order_dropout = nn.Dropout(self.dropout_shallow[0])
+            # self.fm_first_order_embeddings = nn.ModuleList(
+            #     [nn.ModuleList([nn.Embedding(feature_size, 1) for feature_size in self.feature_sizes])
+            #      for _ in range(self.anchor_num)])
+            # if self.dropout_shallow:
+            #     self.fm_first_order_dropout = nn.Dropout(self.dropout_shallow[0])
             self.fm_second_order_embeddings = nn.ModuleList([nn.ModuleList(
                 [nn.Embedding(feature_size, self.embedding_size) for feature_size in self.feature_sizes])
                  for _ in range(self.anchor_num)])
@@ -327,10 +327,14 @@ class LLDeepFM(torch.nn.Module):
         """
         pre_process
         """
-        logging.info('K-means to find {} anchor points'.format(self.anchor_num))
-        kmeans = KMeans(n_clusters=self.anchor_num, n_init=1, max_iter=5, random_state=2018, verbose=1).fit(X_train)
 
-        self.anchor_points = Variable(torch.from_numpy(kmeans.cluster_centers_).float(), requires_grad=adaptive_anchor)
+        """
+            anchor points
+        """
+        logging.info('K-means to find {} anchor points'.format(self.anchor_num))
+        kmeans = KMeans(n_clusters=self.anchor_num, n_init=1, max_iter=1, random_state=2018, verbose=1).fit(X_train)
+
+        self.anchor_points = nn.Parameter(torch.from_numpy(kmeans.cluster_centers_).float(), requires_grad=adaptive_anchor)
         logging.info('K-means done')
 
         if save_path and not os.path.exists('/'.join(save_path.split('/')[0:-1])):
@@ -362,13 +366,18 @@ class LLDeepFM(torch.nn.Module):
         """
         model = self.train()
 
-        optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, self.parameters()), lr=self.learning_rate, weight_decay=self.weight_decay)
         if self.optimizer_type == 'adam':
-            optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+            optimizer = torch.optim.Adam([{'params': self.fm_second_order_embeddings.parameters()},
+                                          {'params': self.bias},
+                                          {'params': self.linear_1.parameters()},
+                                          {'params': self.linear_2.parameters()},
+                                          {'params': self.anchor_points, 'lr': self.learning_rate / 100}],
+                                         lr=self.learning_rate, weight_decay=self.weight_decay)
         elif self.optimizer_type == 'rmsp':
-            optimizer = torch.optim.RMSprop(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+            optimizer = torch.optim.RMSprop(filter(lambda p: p.requires_grad, self.parameters()), lr=self.learning_rate, weight_decay=self.weight_decay)
         elif self.optimizer_type == 'adag':
-            optimizer = torch.optim.Adagrad(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+            optimizer = torch.optim.Adagrad(filter(lambda p: p.requires_grad, self.parameters()), lr=self.learning_rate, weight_decay=self.weight_decay)
 
         criterion = F.binary_cross_entropy_with_logits
 
@@ -408,7 +417,7 @@ class LLDeepFM(torch.nn.Module):
                 if self.verbose:
                     if i % 100 == 99:  # print every 100 mini-batches
                         eval = self.evaluate(batch_xi, batch_xv, batch_x, batch_y)
-                        print('[%d, %5d] loss: %.6f metric: %.6f time: %.1f s' %
+                        logging.info('[%d, %5d] loss: %.6f metric: %.6f time: %.1f s' %
                               (epoch + 1, i + 1, total_loss / 100.0, eval, time() - batch_begin_time))
                         total_loss = 0.0
                         batch_begin_time = time()
@@ -547,3 +556,9 @@ class LLDeepFM(torch.nn.Module):
         """
         y_pred = self.inner_predict_proba(Xi, Xv, X)
         return self.eval_metric(y.cpu().data.numpy(), y_pred)
+
+    def dump_model(self):
+        """
+        dump model for later prediction
+        :return:
+        """
