@@ -142,7 +142,7 @@ class LLDeepFM(torch.nn.Module):
             bias
         """
         if self.use_fm or self.use_ffm:
-            self.bias = torch.nn.Parameter(torch.randn(1))
+            self.bias = torch.nn.Parameter(torch.randn(self.anchor_num, 1))
         """
             fm part
         """
@@ -188,13 +188,15 @@ class LLDeepFM(torch.nn.Module):
             if self.is_deep_dropout:
                 self.linear_0_dropout = nn.Dropout(self.dropout_deep[0])
 
-            self.linear_1 = nn.Linear(self.field_size * self.embedding_size, deep_layers[0])
+            self.linear_1 = nn.ModuleList([nn.Linear(self.field_size * self.embedding_size, deep_layers[0]) for _ in
+                    range(anchor_num)])
             if self.is_batch_norm:
                 self.batch_norm_1 = nn.BatchNorm1d(deep_layers[0])
             if self.is_deep_dropout:
                 self.linear_1_dropout = nn.Dropout(self.dropout_deep[1])
             for i, h in enumerate(self.deep_layers[1:], 1):
-                setattr(self, 'linear_' + str(i + 1), nn.Linear(self.deep_layers[i - 1], self.deep_layers[i]))
+                setattr(self, 'linear_' + str(i + 1), nn.ModuleList([nn.Linear(self.deep_layers[i - 1],
+                    self.deep_layers[i]) for _ in range(anchor_num)]))
                 if self.is_batch_norm:
                     setattr(self, 'batch_norm_' + str(i + 1), nn.BatchNorm1d(deep_layers[i]))
                 if self.is_deep_dropout:
@@ -261,14 +263,14 @@ class LLDeepFM(torch.nn.Module):
                             activation = F.relu
                         if self.is_deep_dropout:
                             deep_emb = self.linear_0_dropout(deep_emb)
-                        x_deep = self.linear_1(deep_emb)
+                        x_deep = self.linear_1[nn_idx[k]](deep_emb)
                         if self.is_batch_norm:
                             x_deep = self.batch_norm_1(x_deep)
                         x_deep = activation(x_deep)
                         if self.is_deep_dropout:
                             x_deep = self.linear_1_dropout(x_deep)
                         for i in range(1, len(self.deep_layers)):
-                            x_deep = getattr(self, 'linear_' + str(i + 1))(x_deep)
+                            x_deep = getattr(self, 'linear_' + str(i + 1))[nn_idx[k]](x_deep)
                             if self.is_batch_norm:
                                 x_deep = getattr(self, 'batch_norm_' + str(i + 1))(x_deep)
                             x_deep = activation(x_deep)
@@ -280,7 +282,7 @@ class LLDeepFM(torch.nn.Module):
                     """
                     if self.use_fm and self.use_deep:
                         # total_sum = torch.sum(fm_second_order, 1) + torch.sum(x_deep, 1) + self.bias
-                        total_sum = torch.sum(fm_second_order) + torch.sum(x_deep) + self.bias
+                        total_sum = torch.sum(fm_second_order) + torch.sum(x_deep) + self.bias[nn_idx[k]]
                     elif self.use_fm:
                         # total_sum = torch.sum(fm_second_order, 1) + self.bias
                         total_sum = torch.sum(fm_second_order) + self.bias
@@ -332,14 +334,14 @@ class LLDeepFM(torch.nn.Module):
             anchor points
         """
         logging.info('K-means to find {} anchor points'.format(self.anchor_num))
-        kmeans = KMeans(n_clusters=self.anchor_num, n_init=1, max_iter=1, random_state=2018, verbose=1).fit(X_train)
+        kmeans = KMeans(n_clusters=self.anchor_num, n_init=1, max_iter=5, random_state=2018, verbose=1).fit(X_train)
 
         self.anchor_points = nn.Parameter(torch.from_numpy(kmeans.cluster_centers_).float(), requires_grad=adaptive_anchor)
         logging.info('K-means done')
 
-        if save_path and not os.path.exists('/'.join(save_path.split('/')[0:-1])):
-            print("Save path is not existed!")
-            return
+        #if save_path and not os.path.exists('/'.join(save_path.split('/')[0:-1])):
+        #    print("Save path is not existed!")
+        #    return
 
         if self.verbose:
             print("pre_process data ing...")
@@ -372,7 +374,7 @@ class LLDeepFM(torch.nn.Module):
                                           {'params': self.bias},
                                           {'params': self.linear_1.parameters()},
                                           {'params': self.linear_2.parameters()},
-                                          {'params': self.anchor_points, 'lr': self.learning_rate / 100}],
+                                          {'params': self.anchor_points, 'lr': self.learning_rate / 10}],
                                          lr=self.learning_rate, weight_decay=self.weight_decay)
         elif self.optimizer_type == 'rmsp':
             optimizer = torch.optim.RMSprop(filter(lambda p: p.requires_grad, self.parameters()), lr=self.learning_rate, weight_decay=self.weight_decay)

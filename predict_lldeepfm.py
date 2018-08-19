@@ -35,7 +35,7 @@ if __name__ == '__main__':
         train_auc, train_loss, valid_auc, valid_loss = \
             ll_deep_fm.fit(xi_train, xv_train, y_train, x_train, xi_test, xv_test, y_test, x_test, adaptive_anchor=True,
                            early_stopping=True,
-                           refit=False)
+                           refit=False, save_path='dump_model/lldeepfm.snapshot')
 
         logging.info('validating')
         y_pred_deepfm = ll_deep_fm.predict_proba(xi_test, xv_test)
