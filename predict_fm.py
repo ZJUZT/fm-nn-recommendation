@@ -5,20 +5,20 @@ import xlearn as xl
 fm_model = xl.create_fm()
 
 # set training data and test data
-fm_model.setTrain('data/130_train.libsvm')
-fm_model.setValidate('data/130_test.libsvm')
+fm_model.setTrain('data/0820_71_train.libsvm')
+fm_model.setValidate('data/0820_71_test.libsvm')
 
 # set hyper-parameters
 param = {'task': 'binary',
-         'lr': 0.1,
-         'lambda': 0.001,
+         'lr': 0.02,
+         'lambda': 0,
          'metric': 'auc',
-         'k': 100,
-         'epoch': 100}
+         'k': 10,
+         'epoch': 200}
 
 # train model
 fm_model.fit(param, './model_dump')
 
 # predict
-fm_model.setTest('data/130_test.libsvm')
-fm_model.predict('./model_dump', 'output.txt')
+# fm_model.setTest('data/130_test.libsvm')
+# fm_model.predict('./model_dump', 'output.txt')

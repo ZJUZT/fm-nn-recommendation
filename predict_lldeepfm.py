@@ -6,9 +6,9 @@ from model import XGBModel
 
 if __name__ == '__main__':
 
-    game = [71]
-    train_data_list = ['data/{}_train'.format(i) for i in game]
-    test_data_list = ['data/{}_test'.format(i) for i in game]
+    game = [116]
+    train_data_list = ['data/0820_{}_train'.format(i) for i in game]
+    test_data_list = ['data/0820_{}_test'.format(i) for i in game]
 
     for i in range(len(train_data_list)):
         logging.info('evaluation on: {}'.format(train_data_list[i]))
@@ -35,8 +35,12 @@ if __name__ == '__main__':
         train_auc, train_loss, valid_auc, valid_loss = \
             ll_deep_fm.fit(xi_train, xv_train, y_train, x_train, xi_test, xv_test, y_test, x_test, adaptive_anchor=True,
                            early_stopping=True,
-                           refit=False, save_path='dump_model/lldeepfm.snapshot')
+                           save_path='dump_model/lldeepfm.snapshot')
 
         logging.info('validating')
-        y_pred_deepfm = ll_deep_fm.predict_proba(xi_test, xv_test)
+        y_pred_deepfm = ll_deep_fm.predict_proba(xi_test, xv_test, x_test)
+
+        # dump deep_fm result
+        with open('res/lldeepfm.res', 'wb') as f:
+            pickle.dump(y_pred_deepfm, f)
 

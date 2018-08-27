@@ -1,18 +1,17 @@
 # -*- coding:utf-8 -*-
 
 """
-Created on Dec 10, 2017
-@author: jachin,Nie
 
-A pytorch implementation of deepfm
+A pytorch implementation of locally linear deepfm
 
 Reference:
 [1] DeepFM: A Factorization-Machine based Neural Network for CTR Prediction,
     Huifeng Guo, Ruiming Tang, Yunming Yey, Zhenguo Li, Xiuqiang He.
+[2] Locally linear factorization machines
+    Liu, Chenghao and Zhang, Teng and Zhao, Peilin and Zhou, Jun and Sun, Jianling
 
 """
 
-import os
 from sklearn.metrics import roc_auc_score
 from time import time
 
@@ -20,7 +19,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-from sklearn.metrics.pairwise import euclidean_distances
 
 from sklearn.cluster import KMeans
 import torch.backends.cudnn
@@ -66,11 +64,12 @@ class LLDeepFM(torch.nn.Module):
     Attention: only support logistics regression
     """
 
-    def __init__(self, field_size, feature_sizes, embedding_size=4, anchor_num=20, nn_num=3, c=0.01,
+    def __init__(self, field_size, feature_sizes, embedding_size=4, anchor_num=100, nn_num=8, c=1e2,
                  is_shallow_dropout=True,
-                 dropout_shallow=[0.0, 0.0],
-                 h_depth=2, deep_layers=[32, 32], is_deep_dropout=True, dropout_deep=[0.0, 0.0, 0.0],
-                 deep_layers_activation='relu', n_epochs=8, batch_size=256, learning_rate=0.01,
+                 fm_first_order_used=False,
+                 dropout_shallow=[0.5, 0.5],
+                 h_depth=2, deep_layers=[32, 32], is_deep_dropout=True, dropout_deep=[0.5, 0.5, 0.5],
+                 deep_layers_activation='relu', n_epochs=1, batch_size=256, learning_rate=0.01,
                  optimizer_type='adam', is_batch_norm=False, verbose=False, random_seed=950104, weight_decay=0.0,
                  use_fm=True, use_ffm=False, use_deep=True, loss_type='logloss', eval_metric=roc_auc_score,
                  use_cuda=True, n_class=1, greater_is_better=True
@@ -102,6 +101,7 @@ class LLDeepFM(torch.nn.Module):
         self.use_cuda = use_cuda
         self.n_class = n_class
         self.greater_is_better = greater_is_better
+        self.fm_first_order_used = fm_first_order_used
 
         self.anchor_num = anchor_num
         self.nn_num = nn_num
@@ -148,11 +148,12 @@ class LLDeepFM(torch.nn.Module):
         """
         if self.use_fm:
             print("Init fm part")
-            # self.fm_first_order_embeddings = nn.ModuleList(
-            #     [nn.ModuleList([nn.Embedding(feature_size, 1) for feature_size in self.feature_sizes])
-            #      for _ in range(self.anchor_num)])
-            # if self.dropout_shallow:
-            #     self.fm_first_order_dropout = nn.Dropout(self.dropout_shallow[0])
+            if self.fm_first_order_used:
+                self.fm_first_order_embeddings = nn.ModuleList(
+                    [nn.ModuleList([nn.Embedding(feature_size, 1) for feature_size in self.feature_sizes])
+                     for _ in range(self.anchor_num)])
+                if self.dropout_shallow:
+                    self.fm_first_order_dropout = nn.Dropout(self.dropout_shallow[0])
             self.fm_second_order_embeddings = nn.ModuleList([nn.ModuleList(
                 [nn.Embedding(feature_size, self.embedding_size) for feature_size in self.feature_sizes])
                  for _ in range(self.anchor_num)])
@@ -227,6 +228,19 @@ class LLDeepFM(torch.nn.Module):
 
                 ll_res = []
                 for k in range(len(nn_idx)):
+
+                    """
+                        fm part with first order
+                    """
+                    if self.fm_first_order_used:
+                        fm_first_order_embedding = self.fm_first_order_embeddings[nn_idx[k]]
+                        first_emb_list = [torch.mm(
+                            torch.FloatTensor(Xv[i][j]).view(-1, 1).t(), emb(torch.LongTensor(Xi[i][j])))
+                            if len(Xi[i][j]) > 0 else torch.FloatTensor([[0.0]])
+                            for j, emb in enumerate(fm_first_order_embedding)
+                            ]
+                        fm_first_order = torch.sum(torch.cat(first_emb_list))
+
                     """
                         fm part with second order
                     """
@@ -281,11 +295,14 @@ class LLDeepFM(torch.nn.Module):
                         sum
                     """
                     if self.use_fm and self.use_deep:
-                        # total_sum = torch.sum(fm_second_order, 1) + torch.sum(x_deep, 1) + self.bias
                         total_sum = torch.sum(fm_second_order) + torch.sum(x_deep) + self.bias[nn_idx[k]]
+                        if self.fm_first_order_used:
+                            total_sum = total_sum + fm_first_order
+
                     elif self.use_fm:
-                        # total_sum = torch.sum(fm_second_order, 1) + self.bias
-                        total_sum = torch.sum(fm_second_order) + self.bias
+                        total_sum = torch.sum(fm_second_order) + self.bias[nn_idx[k]]
+                        if self.fm_first_order_used:
+                            total_sum = total_sum + fm_first_order
                     else:
                         total_sum = torch.sum(x_deep, 1)
 
@@ -295,22 +312,23 @@ class LLDeepFM(torch.nn.Module):
         return torch.stack(res)
 
     def nearest_neighbour(self, x):
-        # dis = euclidean_distances(x, self.anchor_points)
+        """
+        :param x: sample to be local coded
+        :return:
+        """
         x = torch.FloatTensor(x.todense())
         dis = torch.sum((self.anchor_points - x) ** 2, 1)
-        # idx = np.argsort(dis)[0][:self.nn_num]
         sorted_dis, indice = torch.sort(dis)
         weight = sorted_dis[:self.nn_num]
         idx = indice[:self.nn_num]
-        # weight = dis[0][idx]
         dis_scaled = torch.exp(-self.c * weight)
         weight = dis_scaled / torch.sum(dis_scaled)
         return idx, weight
-        # return torch.LongTensor([0]), torch.FloatTensor([1.0])
 
     def fit(self, Xi_train, Xv_train, y_train, X_train, Xi_valid=None, Xv_valid=None,
-            y_valid=None, X_valid=None, adaptive_anchor=False, early_stopping=False, refit=False, save_path=None):
+            y_valid=None, X_valid=None, adaptive_anchor=False, adaptive_nn=False, early_stopping=False, save_path=None):
         """
+        :param adaptive_anchor: whether use adaptive knn for anchor points selection
         :param Xi_train: [[ind1_1, ind1_2, ...], [ind2_1, ind2_2, ...], ..., [indi_1, indi_2, ..., indi_j, ...], ...]
                         indi_j is the list of feature index of feature field j of sample i in the training set
                         support multiple non-zero values in one field
@@ -322,7 +340,6 @@ class LLDeepFM(torch.nn.Module):
         :param Xv_valid: list of list of feature values of each sample in the validation set
         :param y_valid: label of each sample in the validation set
         :param early_stopping: perform early stopping or not
-        :param refit: refit the model on the train+valid data set or not
         :param save_path: the path to save the model
         :return:
         """
@@ -334,14 +351,10 @@ class LLDeepFM(torch.nn.Module):
             anchor points
         """
         logging.info('K-means to find {} anchor points'.format(self.anchor_num))
-        kmeans = KMeans(n_clusters=self.anchor_num, n_init=1, max_iter=5, random_state=2018, verbose=1).fit(X_train)
+        kmeans = KMeans(n_clusters=self.anchor_num, n_init=1, max_iter=50, random_state=2018, verbose=1).fit(X_train)
 
         self.anchor_points = nn.Parameter(torch.from_numpy(kmeans.cluster_centers_).float(), requires_grad=adaptive_anchor)
         logging.info('K-means done')
-
-        #if save_path and not os.path.exists('/'.join(save_path.split('/')[0:-1])):
-        #    print("Save path is not existed!")
-        #    return
 
         if self.verbose:
             print("pre_process data ing...")
@@ -370,12 +383,24 @@ class LLDeepFM(torch.nn.Module):
 
         optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, self.parameters()), lr=self.learning_rate, weight_decay=self.weight_decay)
         if self.optimizer_type == 'adam':
-            optimizer = torch.optim.Adam([{'params': self.fm_second_order_embeddings.parameters()},
-                                          {'params': self.bias},
-                                          {'params': self.linear_1.parameters()},
-                                          {'params': self.linear_2.parameters()},
-                                          {'params': self.anchor_points, 'lr': self.learning_rate / 10}],
-                                         lr=self.learning_rate, weight_decay=self.weight_decay)
+            if self.fm_first_order_used:
+                optimizer = torch.optim.Adam([
+                    {'params': self.fm_first_order_embeddings.parameters()},
+                    {'params': self.fm_second_order_embeddings.parameters()},
+                    {'params': self.bias},
+                    {'params': self.linear_1.parameters()},
+                    {'params': self.linear_2.parameters()},
+                    {'params': self.anchor_points, 'lr': self.learning_rate / 100}],
+                    lr=self.learning_rate, weight_decay=self.weight_decay)
+            else:
+                optimizer = torch.optim.Adam([
+                    {'params': self.fm_second_order_embeddings.parameters()},
+                    {'params': self.bias},
+                    {'params': self.linear_1.parameters()},
+                    {'params': self.linear_2.parameters()},
+                    {'params': self.anchor_points, 'lr': self.learning_rate / 100}],
+                    lr=self.learning_rate, weight_decay=self.weight_decay)
+
         elif self.optimizer_type == 'rmsp':
             optimizer = torch.optim.RMSprop(filter(lambda p: p.requires_grad, self.parameters()), lr=self.learning_rate, weight_decay=self.weight_decay)
         elif self.optimizer_type == 'adag':

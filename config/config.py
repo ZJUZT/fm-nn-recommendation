@@ -79,7 +79,7 @@ lgb = {
 config['lgb'] = lgb
 
 xgb = {
-    'max_depth': 31,
+    'max_depth': 15,
     'reg_lambda': 0.1,
     'min_child_weight': 50,
     'n_estimators': 20,
@@ -91,7 +91,7 @@ xgb = {
     'n_jobs': 2,
     'early_stopping_rounds': 100
 }
-
+0
 config['xgb'] = xgb
 
 # field info
@@ -124,8 +124,10 @@ config['xgb'] = xgb
 #     for i in range(k[0], k[1]):
 #         field_info[i] = v
 
-field_info = [29, 33, 34, 35, 51, 201, 351, 501, 651, 801, 951, 1101, 1251, 1301, 1601, 1636, 1731, 1801, 1950]
+# field_info = [29, 33, 34, 35, 51, 201, 351, 501, 651, 801, 951, 1101, 1251, 1301, 1601, 1636, 1731, 1801, 1950]
 # field_info = [35, 1951]
+field_info = [50, 60, 70, 80, 90, 100, 120]
+# field_info = [i for i in range(120)]
 
 feature_size = [field_info[i] - field_info[i-1] if i > 0 else field_info[i] + 1 for i in range(len(field_info))]
 
