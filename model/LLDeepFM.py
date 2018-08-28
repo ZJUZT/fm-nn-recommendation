@@ -283,20 +283,21 @@ class LLDeepFM(torch.nn.Module):
                         x_deep = activation(x_deep)
                         if self.is_deep_dropout:
                             x_deep = self.linear_1_dropout(x_deep)
-                        for i in range(1, len(self.deep_layers)):
-                            x_deep = getattr(self, 'linear_' + str(i + 1))[nn_idx[k]](x_deep)
+                        for m in range(1, len(self.deep_layers)):
+                            x_deep = getattr(self, 'linear_' + str(m + 1))[nn_idx[k]](x_deep)
                             if self.is_batch_norm:
-                                x_deep = getattr(self, 'batch_norm_' + str(i + 1))(x_deep)
+                                x_deep = getattr(self, 'batch_norm_' + str(m + 1))(x_deep)
                             x_deep = activation(x_deep)
                             if self.is_deep_dropout:
-                                x_deep = getattr(self, 'linear_' + str(i + 1) + '_dropout')(x_deep)
+                                x_deep = getattr(self, 'linear_' + str(m + 1) + '_dropout')(x_deep)
 
                     """
                         sum
                     """
                     if self.use_fm and self.use_deep:
                         bias = self.bias[nn_idx[k]]
-                        total_sum = torch.sum(fm_second_order) + torch.sum(x_deep) + bias
+                        sum_deep = torch.sum(x_deep)
+                        total_sum = torch.sum(fm_second_order) + sum_deep + bias
                         if self.fm_first_order_used:
                             total_sum = total_sum + fm_first_order
 
@@ -352,7 +353,7 @@ class LLDeepFM(torch.nn.Module):
             anchor points
         """
         logging.info('K-means to find {} anchor points'.format(self.anchor_num))
-        kmeans = KMeans(n_clusters=self.anchor_num, n_init=1, max_iter=50, random_state=2018, verbose=1).fit(X_train)
+        kmeans = KMeans(n_clusters=self.anchor_num, n_init=5, max_iter=50, random_state=2018, verbose=1).fit(X_train)
 
         self.anchor_points = nn.Parameter(torch.from_numpy(kmeans.cluster_centers_).float(), requires_grad=adaptive_anchor)
         logging.info('K-means done')
