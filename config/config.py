@@ -136,3 +136,5 @@ config['field_info'] = field_info
 
 config['field_size'] = len(field_info)
 config['feature_size'] = feature_size
+
+config['raw_feature_size'] = 119

@@ -64,7 +64,7 @@ class LLDeepFM(torch.nn.Module):
     Attention: only support logistics regression
     """
 
-    def __init__(self, field_size, feature_sizes, embedding_size=4, anchor_num=100, nn_num=8, c=1e2,
+    def __init__(self, field_size, raw_feature_size, feature_sizes, embedding_size=4, anchor_num=100, nn_num=8, c=1e3,
                  is_shallow_dropout=True,
                  fm_first_order_used=False,
                  dropout_shallow=[0.5, 0.5],
@@ -102,14 +102,14 @@ class LLDeepFM(torch.nn.Module):
         self.n_class = n_class
         self.greater_is_better = greater_is_better
         self.fm_first_order_used = fm_first_order_used
+        self.raw_feature_size = raw_feature_size
 
         self.anchor_num = anchor_num
         self.nn_num = nn_num
         self.c = c
 
-        self.anchor_points = None
-
         torch.manual_seed(self.random_seed)
+        self.anchor_points = nn.Parameter(torch.randn(self.anchor_num, self.raw_feature_size))
 
         """
             check cuda
@@ -295,7 +295,8 @@ class LLDeepFM(torch.nn.Module):
                         sum
                     """
                     if self.use_fm and self.use_deep:
-                        total_sum = torch.sum(fm_second_order) + torch.sum(x_deep) + self.bias[nn_idx[k]]
+                        bias = self.bias[nn_idx[k]]
+                        total_sum = torch.sum(fm_second_order) + torch.sum(x_deep) + bias
                         if self.fm_first_order_used:
                             total_sum = total_sum + fm_first_order
 
@@ -322,7 +323,7 @@ class LLDeepFM(torch.nn.Module):
         weight = sorted_dis[:self.nn_num]
         idx = indice[:self.nn_num]
         dis_scaled = torch.exp(-self.c * weight)
-        weight = dis_scaled / torch.sum(dis_scaled)
+        weight = dis_scaled / (torch.sum(dis_scaled) + 1e-1)
         return idx, weight
 
     def fit(self, Xi_train, Xv_train, y_train, X_train, Xi_valid=None, Xv_valid=None,
@@ -589,3 +590,11 @@ class LLDeepFM(torch.nn.Module):
         dump model for later prediction
         :return:
         """
+
+    def load_model(self):
+        """
+        load pre-trained model
+        :return:
+        """
+        dic = torch.load('dump_model/lldeepfm.snapshot')
+        self.load_state_dict(dic)
