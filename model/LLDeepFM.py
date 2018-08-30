@@ -69,7 +69,7 @@ class LLDeepFM(torch.nn.Module):
                  fm_first_order_used=False,
                  dropout_shallow=[0.5, 0.5],
                  h_depth=2, deep_layers=[32, 32], is_deep_dropout=True, dropout_deep=[0.5, 0.5, 0.5],
-                 deep_layers_activation='relu', n_epochs=1, batch_size=256, learning_rate=0.01,
+                 deep_layers_activation='relu', n_epochs=5, batch_size=256, learning_rate=0.02,
                  optimizer_type='adam', is_batch_norm=False, verbose=False, random_seed=950104, weight_decay=0.0,
                  use_fm=True, use_ffm=False, use_deep=True, loss_type='logloss', eval_metric=roc_auc_score,
                  use_cuda=True, n_class=1, greater_is_better=True
@@ -353,7 +353,7 @@ class LLDeepFM(torch.nn.Module):
             anchor points
         """
         logging.info('K-means to find {} anchor points'.format(self.anchor_num))
-        kmeans = KMeans(n_clusters=self.anchor_num, n_init=5, max_iter=50, random_state=2018, verbose=1).fit(X_train)
+        kmeans = KMeans(n_clusters=self.anchor_num, n_init=1, max_iter=50, random_state=2018, verbose=1).fit(X_train)
 
         self.anchor_points = nn.Parameter(torch.from_numpy(kmeans.cluster_centers_).float(), requires_grad=adaptive_anchor)
         logging.info('K-means done')
